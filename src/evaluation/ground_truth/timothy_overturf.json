@@ -1,0 +1,89 @@
+{
+  "target": "Timothy Overturf",
+  "context": "CEO of Sisu Capital",
+  "expected_facts": [
+    {
+      "fact": "CEO/founder of Sisu Capital",
+      "category": "professional",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Sisu Capital is an investment management firm",
+      "category": "professional",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Based in or operates from the United States",
+      "category": "biographical",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Has a professional profile on LinkedIn or similar platform",
+      "category": "professional",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Has experience in financial services or investment management",
+      "category": "professional",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Sisu Capital may be registered with SEC or state regulators",
+      "category": "financial",
+      "difficulty": "medium",
+      "search_depth_required": 2
+    },
+    {
+      "fact": "Corporate entity registration details",
+      "category": "financial",
+      "difficulty": "medium",
+      "search_depth_required": 3
+    },
+    {
+      "fact": "Any prior professional roles or career history",
+      "category": "professional",
+      "difficulty": "medium",
+      "search_depth_required": 2
+    },
+    {
+      "fact": "Board memberships or advisory roles",
+      "category": "professional",
+      "difficulty": "hard",
+      "search_depth_required": 4
+    },
+    {
+      "fact": "Any regulatory filings, actions, or compliance history",
+      "category": "legal",
+      "difficulty": "hard",
+      "search_depth_required": 4
+    }
+  ],
+  "expected_entities": [
+    {"name": "Timothy Overturf", "type": "person"},
+    {"name": "Sisu Capital", "type": "organization"}
+  ],
+  "expected_relationships": [
+    {
+      "source": "Timothy Overturf",
+      "target": "Sisu Capital",
+      "type": "WORKS_AT"
+    }
+  ],
+  "expected_risk_flags": [
+    {
+      "category": "behavioral",
+      "description": "Any resume or credential inconsistencies",
+      "difficulty": "hard"
+    },
+    {
+      "category": "legal",
+      "description": "Any regulatory actions or litigation",
+      "difficulty": "hard"
+    }
+  ]
+}

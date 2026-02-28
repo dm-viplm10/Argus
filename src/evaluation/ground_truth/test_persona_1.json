@@ -1,0 +1,68 @@
+{
+  "target": "Elizabeth Holmes",
+  "context": "Former CEO of Theranos",
+  "expected_facts": [
+    {
+      "fact": "Founded Theranos in 2003",
+      "category": "professional",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Dropped out of Stanford University",
+      "category": "biographical",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Convicted of fraud in January 2022",
+      "category": "legal",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Theranos claimed to revolutionize blood testing with small samples",
+      "category": "professional",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Board included notable figures like Henry Kissinger, George Shultz, Jim Mattis",
+      "category": "professional",
+      "difficulty": "medium",
+      "search_depth_required": 2
+    },
+    {
+      "fact": "SEC charged Holmes with massive fraud in 2018",
+      "category": "legal",
+      "difficulty": "medium",
+      "search_depth_required": 2
+    },
+    {
+      "fact": "Walgreens partnership for in-store blood testing",
+      "category": "financial",
+      "difficulty": "medium",
+      "search_depth_required": 2
+    },
+    {
+      "fact": "Sentenced to 11+ years in prison",
+      "category": "legal",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    }
+  ],
+  "expected_entities": [
+    {"name": "Elizabeth Holmes", "type": "person"},
+    {"name": "Theranos", "type": "organization"},
+    {"name": "Stanford University", "type": "organization"}
+  ],
+  "expected_relationships": [
+    {"source": "Elizabeth Holmes", "target": "Theranos", "type": "WORKS_AT"},
+    {"source": "Elizabeth Holmes", "target": "Stanford University", "type": "ASSOCIATED_WITH"}
+  ],
+  "expected_risk_flags": [
+    {"category": "legal", "description": "Federal fraud conviction", "difficulty": "easy"},
+    {"category": "financial", "description": "Massive investor fraud", "difficulty": "easy"},
+    {"category": "behavioral", "description": "Deception of partners and investors", "difficulty": "medium"}
+  ]
+}

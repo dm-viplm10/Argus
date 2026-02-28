@@ -1,0 +1,83 @@
+{
+  "target": "Sam Bankman-Fried",
+  "context": "Former CEO of FTX cryptocurrency exchange",
+  "expected_facts": [
+    {
+      "fact": "Founded FTX cryptocurrency exchange",
+      "category": "professional",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Founded Alameda Research quantitative trading firm",
+      "category": "professional",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "MIT graduate",
+      "category": "biographical",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Convicted on federal fraud and money laundering charges in 2023",
+      "category": "legal",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "FTX collapsed in November 2022 amid liquidity crisis",
+      "category": "financial",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Misused customer funds through Alameda Research",
+      "category": "financial",
+      "difficulty": "medium",
+      "search_depth_required": 2
+    },
+    {
+      "fact": "Major political donor to both parties",
+      "category": "social",
+      "difficulty": "medium",
+      "search_depth_required": 2
+    },
+    {
+      "fact": "Sentenced to 25 years in prison",
+      "category": "legal",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Complex network of 130+ affiliated entities",
+      "category": "financial",
+      "difficulty": "hard",
+      "search_depth_required": 4
+    },
+    {
+      "fact": "Bahamas-based operations for regulatory arbitrage",
+      "category": "legal",
+      "difficulty": "medium",
+      "search_depth_required": 3
+    }
+  ],
+  "expected_entities": [
+    {"name": "Sam Bankman-Fried", "type": "person"},
+    {"name": "FTX", "type": "organization"},
+    {"name": "Alameda Research", "type": "organization"},
+    {"name": "MIT", "type": "organization"}
+  ],
+  "expected_relationships": [
+    {"source": "Sam Bankman-Fried", "target": "FTX", "type": "WORKS_AT"},
+    {"source": "Sam Bankman-Fried", "target": "Alameda Research", "type": "WORKS_AT"},
+    {"source": "Alameda Research", "target": "FTX", "type": "ASSOCIATED_WITH"}
+  ],
+  "expected_risk_flags": [
+    {"category": "legal", "description": "Federal fraud and money laundering conviction", "difficulty": "easy"},
+    {"category": "financial", "description": "Customer fund misappropriation", "difficulty": "easy"},
+    {"category": "network", "description": "Complex offshore entity network", "difficulty": "hard"},
+    {"category": "behavioral", "description": "Commingling of company and trading firm assets", "difficulty": "medium"}
+  ]
+}

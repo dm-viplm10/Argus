@@ -1,0 +1,70 @@
+{
+  "target": "Adam Neumann",
+  "context": "Co-founder and former CEO of WeWork",
+  "expected_facts": [
+    {
+      "fact": "Co-founded WeWork in 2010",
+      "category": "professional",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Born in Israel",
+      "category": "biographical",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "WeWork failed IPO in 2019 led to his ouster",
+      "category": "financial",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "Received $1.7 billion exit package from SoftBank",
+      "category": "financial",
+      "difficulty": "medium",
+      "search_depth_required": 2
+    },
+    {
+      "fact": "Self-dealing through real estate transactions with WeWork",
+      "category": "financial",
+      "difficulty": "medium",
+      "search_depth_required": 2
+    },
+    {
+      "fact": "Founded Flow, a residential real estate company, after WeWork",
+      "category": "professional",
+      "difficulty": "medium",
+      "search_depth_required": 2
+    },
+    {
+      "fact": "SoftBank was the largest investor in WeWork",
+      "category": "financial",
+      "difficulty": "easy",
+      "search_depth_required": 1
+    },
+    {
+      "fact": "WeWork S-1 filing revealed governance concerns",
+      "category": "legal",
+      "difficulty": "medium",
+      "search_depth_required": 3
+    }
+  ],
+  "expected_entities": [
+    {"name": "Adam Neumann", "type": "person"},
+    {"name": "WeWork", "type": "organization"},
+    {"name": "SoftBank", "type": "organization"},
+    {"name": "Flow", "type": "organization"}
+  ],
+  "expected_relationships": [
+    {"source": "Adam Neumann", "target": "WeWork", "type": "WORKS_AT"},
+    {"source": "Adam Neumann", "target": "Flow", "type": "WORKS_AT"},
+    {"source": "SoftBank", "target": "WeWork", "type": "INVESTED_IN"}
+  ],
+  "expected_risk_flags": [
+    {"category": "financial", "description": "Self-dealing transactions", "difficulty": "medium"},
+    {"category": "behavioral", "description": "Governance concerns and excessive control", "difficulty": "medium"},
+    {"category": "reputational", "description": "Failed IPO and company valuation collapse", "difficulty": "easy"}
+  ]
+}
