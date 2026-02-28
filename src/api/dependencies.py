@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import Any
+
+import redis.asyncio as aioredis
 
 from src.config import Settings, get_settings
 from src.graph_db.connection import Neo4jConnection
@@ -14,6 +15,7 @@ _neo4j_conn: Neo4jConnection | None = None
 _registry: LLMRegistry | None = None
 _router: ModelRouter | None = None
 _checkpointer: Any = None
+_redis_client: aioredis.Redis | None = None
 
 
 def set_neo4j_conn(conn: Neo4jConnection) -> None:
@@ -52,3 +54,12 @@ def get_router() -> ModelRouter:
 
 def get_checkpointer() -> Any:
     return _checkpointer
+
+
+def set_redis_client(client: aioredis.Redis) -> None:
+    global _redis_client
+    _redis_client = client
+
+
+def get_redis() -> aioredis.Redis | None:
+    return _redis_client

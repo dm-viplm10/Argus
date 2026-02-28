@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
+import redis as sync_redis
 from celery import Celery
 
 from src.config import get_settings
@@ -31,6 +33,20 @@ celery_app.conf.update(
 )
 
 
+_JOB_KEY = "argus:job:{}"
+_JOB_TTL = 86400 * 7  # 7 days
+
+
+def _write_job_status(research_id: str, data: dict) -> None:
+    """Write job status to Redis from the Celery worker (sync)."""
+    try:
+        r = sync_redis.from_url(settings.REDIS_URL, decode_responses=True)
+        r.set(_JOB_KEY.format(research_id), json.dumps(data), ex=_JOB_TTL)
+        r.close()
+    except Exception as exc:
+        logger.warning("redis_status_write_failed", research_id=research_id, error=str(exc))
+
+
 @celery_app.task(bind=True, name="research.run", max_retries=1)
 def run_research_task(self, research_id: str, request: dict) -> dict:
     """Celery task that runs the full LangGraph research pipeline.
@@ -40,14 +56,30 @@ def run_research_task(self, research_id: str, request: dict) -> dict:
     """
     setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
     logger.info("celery_task_started", research_id=research_id, task_id=self.request.id)
+    _write_job_status(research_id, {"status": "running", "task_id": self.request.id})
 
     try:
         result = asyncio.get_event_loop().run_until_complete(
             _execute_research(research_id, request)
         )
+        _write_job_status(research_id, {
+            "status": "completed",
+            "task_id": self.request.id,
+            "facts_count": len(result.get("verified_facts", [])),
+            "entities_count": len(result.get("entities", [])),
+            "risk_flags_count": len(result.get("risk_flags", [])),
+            "overall_risk_score": result.get("overall_risk_score"),
+            "final_report": result.get("final_report"),
+            "audit_log": result.get("audit_log", []),
+        })
         logger.info("celery_task_completed", research_id=research_id)
         return {"research_id": research_id, "status": "completed"}
     except Exception as exc:
+        _write_job_status(research_id, {
+            "status": "failed",
+            "task_id": self.request.id,
+            "error": str(exc),
+        })
         logger.error("celery_task_failed", research_id=research_id, error=str(exc))
         raise self.retry(exc=exc, countdown=30)
 
