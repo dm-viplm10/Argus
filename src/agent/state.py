@@ -1,0 +1,73 @@
+"""Research agent state schema for the LangGraph supervisor graph."""
+
+from __future__ import annotations
+
+import operator
+from typing import Annotated, TypedDict
+
+
+def _merge_lists(left: list, right: list) -> list:
+    """Append new items to an existing list."""
+    return left + right
+
+
+def _merge_sets(left: set, right: set) -> set:
+    """Union two sets."""
+    return left | right
+
+
+class ResearchState(TypedDict, total=False):
+    """Full state schema for the research supervisor graph.
+
+    Fields use Annotated reducers so that node outputs are merged
+    into the cumulative state rather than overwriting it.
+    """
+
+    # ── Input (set once at start) ──
+    research_id: str
+    target_name: str
+    target_context: str
+    research_objectives: list[str]
+
+    # ── Supervisor control ──
+    current_agent: str
+    next_action: str
+    research_plan: list[dict]
+    current_phase: int
+    max_phases: int
+    phase_complete: bool
+    pending_queries: list[str]
+
+    # ── Search & scrape ──
+    search_queries_executed: Annotated[list[dict], _merge_lists]
+    search_results: Annotated[list[dict], _merge_lists]
+    scraped_content: Annotated[list[dict], _merge_lists]
+    urls_visited: Annotated[set[str], _merge_sets]
+
+    # ── Analysis ──
+    extracted_facts: Annotated[list[dict], _merge_lists]
+    entities: Annotated[list[dict], _merge_lists]
+    relationships: Annotated[list[dict], _merge_lists]
+    contradictions: Annotated[list[dict], _merge_lists]
+
+    # ── Verification ──
+    verified_facts: Annotated[list[dict], _merge_lists]
+    unverified_claims: Annotated[list[str], _merge_lists]
+
+    # ── Risk ──
+    risk_flags: Annotated[list[dict], _merge_lists]
+    overall_risk_score: float | None
+
+    # ── Graph DB ──
+    graph_nodes_created: Annotated[list[str], _merge_lists]
+    graph_relationships_created: Annotated[list[str], _merge_lists]
+
+    # ── Output ──
+    final_report: str | None
+
+    # ── Meta & audit ──
+    iteration_count: int
+    total_tokens_used: int
+    total_cost_usd: float
+    errors: Annotated[list[dict], _merge_lists]
+    audit_log: Annotated[list[dict], _merge_lists]
