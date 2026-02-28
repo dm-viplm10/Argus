@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 class ExtractedFact(BaseModel):
     fact: str
     category: Literal["biographical", "professional", "financial", "legal", "social", "behavioral"]
-    confidence: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(default=0.5, description="0.0 to 1.0")
     source_url: str
     source_type: Literal["official", "news", "social", "forum", "filing", "unknown"] = "unknown"
     date_mentioned: str | None = None
@@ -32,7 +32,7 @@ class ExtractedRelationship(BaseModel):
     target_entity: str
     relationship_type: str
     evidence: str = ""
-    confidence: float = Field(ge=0.0, le=1.0, default=0.5)
+    confidence: float = Field(default=0.5, description="0.0 to 1.0")
     source_url: str = ""
 
 
@@ -43,7 +43,7 @@ class RiskFlag(BaseModel):
     flag: str
     category: Literal["legal", "financial", "reputational", "behavioral", "network"]
     severity: Literal["low", "medium", "high", "critical"]
-    confidence: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(default=0.5, description="0.0 to 1.0")
     evidence: list[str] = Field(default_factory=list)
     source_urls: list[str] = Field(default_factory=list)
     recommended_followup: str = ""
@@ -58,7 +58,7 @@ class ResearchPhase(BaseModel):
     description: str
     queries: list[str] = Field(default_factory=list)
     expected_info_types: list[str] = Field(default_factory=list)
-    priority: int = Field(ge=1, le=5, default=3)
+    priority: int = Field(default=3)  # 1=highest, 5=lowest; Anthropic doesn't support min/max on integer schemas
 
 
 class ResearchPlan(BaseModel):
@@ -73,7 +73,7 @@ class ResearchPlan(BaseModel):
 class VerifiedFact(BaseModel):
     fact: str
     category: str
-    final_confidence: float = Field(ge=0.0, le=1.0)
+    final_confidence: float = Field(default=0.5, description="0.0 to 1.0")
     supporting_sources: list[str] = Field(default_factory=list)
     contradicting_sources: list[str] = Field(default_factory=list)
     notes: str = ""
@@ -110,7 +110,7 @@ class VerifierOutput(BaseModel):
 
 class RiskAssessment(BaseModel):
     risk_flags: list[RiskFlag] = Field(default_factory=list)
-    overall_risk_score: float = Field(ge=0.0, le=1.0, default=0.0)
+    overall_risk_score: float = Field(default=0.0, description="0.0 to 1.0")
     summary: str = ""
 
 

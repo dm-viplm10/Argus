@@ -12,7 +12,21 @@ Name: {target_name}
 Context: {target_context}
 </target_info>
 
-## Content to Analyze
+## Current Research Phase
+
+<phase_context>
+Phase: {phase_number} — {phase_name}
+Goal: {phase_description}
+Expected information types: {expected_info_types}
+</phase_context>
+
+## Supervisor Instructions
+
+<supervisor_instructions>
+{supervisor_instructions}
+</supervisor_instructions>
+
+## NEW Content to Analyze (this phase only)
 
 <scraped_content>
 {content}

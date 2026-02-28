@@ -33,6 +33,9 @@ _JOB_TTL = 86400 * 7  # 7 days
 # In-memory fallback for when Redis is unavailable (tests / local dev without Redis)
 _jobs: dict[str, dict[str, Any]] = {}
 
+# Tracks live asyncio tasks for inline (non-Celery) runs so they can be cancelled
+_inline_tasks: dict[str, asyncio.Task] = {}
+
 
 async def _redis_set_job(research_id: str, data: dict) -> None:
     """Write job metadata to Redis. Falls back silently if Redis unavailable."""
@@ -80,7 +83,7 @@ async def start_research(
     _jobs[research_id] = job_data
     await _redis_set_job(research_id, {"status": "queued", "created_at": now.isoformat()})
 
-    # Fire background task (Celery integration in Phase 8; inline fallback here)
+        # Fire background task (Celery integration in Phase 8; inline fallback here)
     try:
         from src.worker import run_research_task
 
@@ -88,7 +91,8 @@ async def start_research(
         logger.info("research_queued_celery", research_id=research_id)
     except Exception:
         # Celery unavailable — run inline as asyncio task
-        asyncio.create_task(_run_research_inline(research_id, request, registry, neo4j))
+        task = asyncio.create_task(_run_research_inline(research_id, request, registry, neo4j))
+        _inline_tasks[research_id] = task
         logger.info("research_queued_inline", research_id=research_id)
 
     return ResearchResponse(
@@ -125,6 +129,9 @@ async def _run_research_inline(
             "max_phases": request.max_depth,
             "iteration_count": 0,
             "phase_complete": False,
+            "supervisor_instructions": "",
+            "search_results_analyzed_count": 0,
+            "facts_verified_count": 0,
             "search_queries_executed": [],
             "search_results": [],
             "scraped_content": [],
@@ -146,16 +153,24 @@ async def _run_research_inline(
             "audit_log": [],
         }
 
-        config = {"configurable": {"thread_id": research_id}}
+        config = {"configurable": {"thread_id": research_id}, "recursion_limit": 150}
         result = await graph.ainvoke(initial_state, config)
         _jobs[research_id]["state"] = result
         _jobs[research_id]["status"] = "completed"
         logger.info("research_completed", research_id=research_id)
 
+    except asyncio.CancelledError:
+        _jobs[research_id]["status"] = "cancelled"
+        logger.info("research_cancelled", research_id=research_id)
+        raise
+
     except Exception as exc:
         _jobs[research_id]["status"] = "failed"
         _jobs[research_id]["error"] = str(exc)
         logger.error("research_failed", research_id=research_id, error=str(exc))
+
+    finally:
+        _inline_tasks.pop(research_id, None)
 
 
 @router.get("/{research_id}", response_model=ResearchResult)
@@ -221,6 +236,53 @@ async def get_research_status(research_id: str) -> ResearchStatus:
         iteration_count=graph_state.get("iteration_count", 0),
         errors=graph_state.get("errors", []),
     )
+
+
+@router.delete("/{research_id}/cancel", status_code=200)
+async def cancel_research(research_id: str) -> dict:
+    """Cancel a queued or running research job.
+
+    For Celery-backed jobs, revokes the task on the worker.
+    For inline asyncio jobs, cancels the background task directly.
+    Returns a 409 if the job is already in a terminal state.
+    """
+    redis_job = await _redis_get_job(research_id)
+    mem_job = _jobs.get(research_id)
+
+    if not redis_job and not mem_job:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    status = (redis_job or mem_job).get("status", "unknown")
+    if status in ("completed", "failed", "cancelled"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot cancel a job with status '{status}'",
+        )
+
+    # --- Celery path ---
+    task_id = (redis_job or {}).get("task_id") or (mem_job or {}).get("task_id")
+    if task_id:
+        try:
+            from src.worker import celery_app
+
+            celery_app.control.revoke(task_id, terminate=True, signal="SIGTERM")
+            logger.info("celery_task_revoked", research_id=research_id, task_id=task_id)
+        except Exception as exc:
+            logger.warning("celery_revoke_failed", research_id=research_id, error=str(exc))
+
+    # --- Inline asyncio path ---
+    inline_task = _inline_tasks.get(research_id)
+    if inline_task and not inline_task.done():
+        inline_task.cancel()
+        logger.info("inline_task_cancelled", research_id=research_id)
+
+    # Mark cancelled in both stores
+    cancelled_data = {**(redis_job or {}), "status": "cancelled"}
+    await _redis_set_job(research_id, cancelled_data)
+    if mem_job:
+        mem_job["status"] = "cancelled"
+
+    return {"research_id": research_id, "status": "cancelled"}
 
 
 @router.get("/{research_id}/stream")

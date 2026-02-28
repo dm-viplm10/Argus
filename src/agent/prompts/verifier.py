@@ -13,7 +13,13 @@ Name: {target_name}
 Context: {target_context}
 </target_info>
 
-## Facts to Verify
+## Supervisor Instructions
+
+<supervisor_instructions>
+{supervisor_instructions}
+</supervisor_instructions>
+
+## NEW Facts to Verify (this phase only — do not re-verify facts from prior phases)
 
 <extracted_facts>
 {facts_json}

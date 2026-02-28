@@ -36,6 +36,7 @@ async def supervisor_node(state: dict[str, Any], *, router: ModelRouter) -> dict
         risk_count=len(state.get("risk_flags", [])),
         graph_nodes_count=len(state.get("graph_nodes_created", [])),
         searches_count=len(state.get("search_queries_executed", [])),
+        pending_queries_count=len(state.get("pending_queries", [])),
         iteration_count=iteration,
         has_plan=bool(state.get("research_plan")),
         has_risk=bool(state.get("risk_flags")),
@@ -84,6 +85,7 @@ async def supervisor_node(state: dict[str, Any], *, router: ModelRouter) -> dict
     updates: dict[str, Any] = {
         "current_agent": decision.next_agent,
         "next_action": decision.next_agent,
+        "supervisor_instructions": decision.instructions_for_agent,
         "iteration_count": iteration,
         "audit_log": [audit.model_dump()],
     }
