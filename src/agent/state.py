@@ -32,11 +32,17 @@ class ResearchState(TypedDict, total=False):
     # ── Supervisor control ──
     current_agent: str
     next_action: str
+    supervisor_instructions: str   # Contextual guidance from supervisor to the next node
     research_plan: list[dict]
     current_phase: int
     max_phases: int
     phase_complete: bool
     pending_queries: list[str]
+
+    # ── Delta processing cursors (never reset; only advance) ──
+    # Prevents nodes from re-processing already-handled data on subsequent phases
+    search_results_analyzed_count: int   # How many search_results the analyzer has processed
+    facts_verified_count: int            # How many extracted_facts the verifier has processed
 
     # ── Search & scrape ──
     search_queries_executed: Annotated[list[dict], _merge_lists]

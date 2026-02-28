@@ -40,6 +40,7 @@ Verified Facts: {verified_count}
 Risk Flags: {risk_count}
 Graph Nodes Created: {graph_nodes_count}
 Searches Executed: {searches_count}
+Pending Queries (generated, not yet searched): {pending_queries_count}
 Iteration Count: {iteration_count}
 Has Research Plan: {has_plan}
 Has Risk Assessment: {has_risk}

@@ -19,19 +19,24 @@ logger = get_logger(__name__)
 
 
 async def verifier_node(state: dict[str, Any], *, router: ModelRouter) -> dict[str, Any]:
-    """Cross-reference extracted facts and assign final confidence scores."""
+    """Cross-reference only newly extracted facts and assign confidence scores."""
     writer = get_stream_writer()
     writer({"node": "verifier", "status": "started"})
 
-    facts = state.get("extracted_facts", [])
-    if not facts:
-        writer({"node": "verifier", "status": "skipped", "reason": "no facts to verify"})
+    # Delta: only verify facts extracted since the last verifier run
+    all_facts = state.get("extracted_facts", [])
+    already_verified_count = state.get("facts_verified_count", 0)
+    new_facts = all_facts[already_verified_count:]
+
+    if not new_facts:
+        writer({"node": "verifier", "status": "skipped", "reason": "no new facts to verify"})
         return {}
 
     prompt = VERIFIER_SYSTEM_PROMPT.format(
         target_name=state["target_name"],
         target_context=state.get("target_context", ""),
-        facts_json=json.dumps(facts, indent=2)[:50_000],
+        supervisor_instructions=state.get("supervisor_instructions", "No specific instructions."),
+        facts_json=json.dumps(new_facts, indent=2)[:50_000],
     )
 
     start = time.monotonic()
@@ -55,7 +60,7 @@ async def verifier_node(state: dict[str, Any], *, router: ModelRouter) -> dict[s
         action="cross_reference",
         timestamp=datetime.now(timezone.utc).isoformat(),
         model_used="anthropic/claude-sonnet-4.6",
-        input_summary=f"Verified {len(facts)} extracted facts",
+        input_summary=f"Verified {len(new_facts)} new facts (skipped {already_verified_count} already verified)",
         output_summary=f"{len(verified)} verified, {len(output.unverified_claims)} unverified, {len(contradictions)} contradictions",
         duration_ms=elapsed_ms,
     )
@@ -72,5 +77,7 @@ async def verifier_node(state: dict[str, Any], *, router: ModelRouter) -> dict[s
         "verified_facts": verified,
         "unverified_claims": output.unverified_claims,
         "contradictions": contradictions,
+        # Advance the cursor so the next verifier call skips already-processed facts
+        "facts_verified_count": already_verified_count + len(new_facts),
         "audit_log": [audit.model_dump()],
     }

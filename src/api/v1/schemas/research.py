@@ -25,7 +25,7 @@ class ResearchResponse(BaseModel):
 
 class ResearchStatus(BaseModel):
     research_id: str
-    status: Literal["queued", "running", "completed", "failed"]
+    status: Literal["queued", "running", "completed", "failed", "cancelled"]
     current_phase: int = 0
     max_phases: int = 5
     facts_extracted: int = 0

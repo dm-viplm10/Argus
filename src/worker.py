@@ -115,6 +115,9 @@ async def _execute_research(research_id: str, request: dict) -> dict:
             "max_phases": request.get("max_depth", 5),
             "iteration_count": 0,
             "phase_complete": False,
+            "supervisor_instructions": "",
+            "search_results_analyzed_count": 0,
+            "facts_verified_count": 0,
             "search_queries_executed": [],
             "search_results": [],
             "scraped_content": [],
@@ -136,7 +139,9 @@ async def _execute_research(research_id: str, request: dict) -> dict:
             "audit_log": [],
         }
 
-        config = {"configurable": {"thread_id": research_id}}
+        # recursion_limit covers all supervisor hops across the full pipeline.
+        # A 5-phase run needs ~50-60 hops minimum; 150 gives headroom for retries.
+        config = {"configurable": {"thread_id": research_id}, "recursion_limit": 150}
         result = await graph.ainvoke(initial_state, config)
         return result
 

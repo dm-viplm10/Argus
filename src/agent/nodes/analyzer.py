@@ -20,15 +20,21 @@ logger = get_logger(__name__)
 
 
 async def analyzer_node(state: dict[str, Any], *, router: ModelRouter) -> dict[str, Any]:
-    """Extract structured facts, entities, and relationships from search results."""
+    """Extract structured facts, entities, and relationships from new search results only."""
     writer = get_stream_writer()
-    writer({"node": "analyzer", "status": "started"})
+    current_phase = state.get("current_phase", 1)
+    writer({"node": "analyzer", "status": "started", "phase": current_phase})
 
-    search_results = state.get("search_results", [])
+    # Delta: only process results added since the last analyzer run
+    all_results = state.get("search_results", [])
+    already_analyzed = state.get("search_results_analyzed_count", 0)
+    new_results = all_results[already_analyzed:]
+
+    # Scraped content is always targeted at the current phase — process all of it
     scraped_content = state.get("scraped_content", [])
 
     content_blocks: list[str] = []
-    for sr in search_results:
+    for sr in new_results:
         c = sr.get("content", "")
         if c:
             content_blocks.append(c)
@@ -38,15 +44,25 @@ async def analyzer_node(state: dict[str, Any], *, router: ModelRouter) -> dict[s
             content_blocks.append(c)
 
     if not content_blocks:
-        writer({"node": "analyzer", "status": "skipped", "reason": "no content to analyze"})
+        writer({"node": "analyzer", "status": "skipped", "reason": "no new content to analyze"})
         return {}
 
     combined = "\n\n---\n\n".join(content_blocks)
     combined = truncate_content(combined, max_chars=100_000)
 
+    # Pull phase info from the research plan for context
+    plan = state.get("research_plan", [])
+    phase_idx = current_phase - 1
+    phase_info = plan[phase_idx] if phase_idx < len(plan) else {}
+
     prompt = ANALYZER_SYSTEM_PROMPT.format(
         target_name=state["target_name"],
         target_context=state.get("target_context", ""),
+        phase_number=phase_info.get("phase_number", current_phase),
+        phase_name=phase_info.get("name", f"Phase {current_phase}"),
+        phase_description=phase_info.get("description", ""),
+        expected_info_types=", ".join(phase_info.get("expected_info_types", [])),
+        supervisor_instructions=state.get("supervisor_instructions", "No specific instructions."),
         content=combined,
     )
 
@@ -89,5 +105,7 @@ async def analyzer_node(state: dict[str, Any], *, router: ModelRouter) -> dict[s
         "extracted_facts": facts,
         "entities": entities,
         "relationships": relationships,
+        # Advance the cursor so the next analyzer call skips already-processed results
+        "search_results_analyzed_count": already_analyzed + len(new_results),
         "audit_log": [audit.model_dump()],
     }
