@@ -21,6 +21,13 @@ class ModelRouter:
 
     def __init__(self, registry: LLMRegistry) -> None:
         self._registry = registry
+        # Populated after every invoke() call so nodes can read token usage.
+        self._last_usage: dict[str, int | float] = {"tokens": 0, "cost": 0.0}
+
+    @property
+    def last_usage(self) -> dict[str, int | float]:
+        """Token and cost data from the most recent invoke() call."""
+        return dict(self._last_usage)
 
     @traceable(run_type="chain", name="model_router_invoke")
     async def invoke(
@@ -55,11 +62,16 @@ class ModelRouter:
                 result = await target.ainvoke(messages)
                 elapsed_ms = int((time.monotonic() - start) * 1000)
 
-                token_usage = getattr(result, "usage_metadata", None)
+                # Token counts come from LangChain's usage_metadata, which is populated
+                # automatically by the SDK for every model call. LangSmith (via
+                # LANGCHAIN_TRACING_V2=True) is the source of truth for cost analytics;
+                # we only extract token counts here for lightweight in-app audit entries.
                 tokens = 0
-                if token_usage:
-                    tokens = getattr(token_usage, "total_tokens", 0)
+                usage_meta = getattr(result, "usage_metadata", None)
+                if usage_meta:
+                    tokens = getattr(usage_meta, "total_tokens", 0) or 0
 
+                self._last_usage = {"tokens": tokens, "cost": 0.0}
                 self._registry.record_usage(task, tokens, 0.0)
 
                 if label != "primary":
@@ -70,11 +82,20 @@ class ModelRouter:
                         model=model.model_name,
                         elapsed_ms=elapsed_ms,
                     )
+                else:
+                    logger.debug(
+                        "model_invoked",
+                        task=task,
+                        model=model.model_name,
+                        tokens=tokens,
+                        elapsed_ms=elapsed_ms,
+                    )
 
                 return result
 
             except Exception as exc:
                 last_error = exc
+                self._last_usage = {"tokens": 0, "cost": 0.0}
                 logger.error(
                     "model_invoke_failed",
                     task=task,

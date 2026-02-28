@@ -35,8 +35,11 @@ Instructions:
 Do your best to execute ALL queries and gather thorough results.
 """
 
-# Max queries per ReAct agent invocation to prevent context overflow
-MAX_QUERIES_PER_BATCH = 3
+# Max queries per ReAct agent invocation to prevent context overflow.
+# GPT-4.1-mini has a 1M token context; 6 Tavily results (~500 words each)
+# is well within that limit and eliminates the double-trip caused by the
+# query_refiner generating 3 queries per phase.
+MAX_QUERIES_PER_BATCH = 6
 
 
 def build_search_agent(registry: LLMRegistry, settings: Settings):
@@ -137,11 +140,17 @@ async def search_and_scrape_node(
         "results_collected": len(search_results),
     })
 
+    # Mark this phase as searched once all pending queries are exhausted.
+    # If queries remain (rare with batch size >= query count), the flag stays
+    # False so the supervisor loops back to search_and_scrape first.
+    phase_searched = len(remaining_queries) == 0
+
     return {
         "search_queries_executed": executed,
         "search_results": search_results,
         "scraped_content": scraped_content,
         "urls_visited": urls_visited,
         "pending_queries": remaining_queries,
+        "current_phase_searched": phase_searched,
         "audit_log": [audit.model_dump()],
     }

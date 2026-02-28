@@ -15,7 +15,8 @@ Objectives: {objectives}
 
 ## Planning Guidelines
 
-Create a 5-phase research plan following this progression:
+Create a {max_phases}-phase research plan by selecting the FIRST {max_phases} phases
+from the following progression (ordered from highest to lowest priority):
 
 - Phase 1 — Surface Layer: Basic bio, professional profiles, company website,
   press releases, public social media.
@@ -28,8 +29,9 @@ Create a 5-phase research plan following this progression:
 - Phase 5 — Deep Layer: Forum mentions, archived pages, social media history,
   conference appearances, patent filings, domain registrations.
 
-For each phase, generate 3-6 specific search queries tailored to the target.
-Queries should be concrete, not generic.
+Generate EXACTLY {max_phases} phases. Do not generate more or fewer.
+For each phase, generate 3 specific search queries tailored to the target.
+Queries should be concrete and targeted, not generic.
 
 ## Negative Instructions
 
@@ -46,12 +48,12 @@ Respond ONLY with valid JSON matching this schema:
       "phase_number": 1,
       "name": "Surface Layer",
       "description": "Brief description of this phase's goals",
-      "queries": ["specific query 1", "specific query 2"],
+      "queries": ["specific query 1", "specific query 2", "specific query 3"],
       "expected_info_types": ["biographical", "professional"],
       "priority": 1
     }}
   ],
-  "total_estimated_queries": 20,
+  "total_estimated_queries": {max_phases_times_3},
   "rationale": "Brief explanation of the investigation strategy"
 }}
 """

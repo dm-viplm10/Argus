@@ -116,8 +116,16 @@ async def _execute_research(research_id: str, request: dict) -> dict:
             "iteration_count": 0,
             "phase_complete": False,
             "supervisor_instructions": "",
+            # Per-phase progress flags — reset on every phase advance
+            "current_phase_searched": False,
+            "current_phase_analyzed": False,
+            "current_phase_verified": False,
+            "current_phase_risk_assessed": False,
+            # Delta cursors — only advance, never reset
             "search_results_analyzed_count": 0,
+            "scraped_content_analyzed_count": 0,
             "facts_verified_count": 0,
+            "risk_assessed_facts_count": 0,
             "search_queries_executed": [],
             "search_results": [],
             "scraped_content": [],

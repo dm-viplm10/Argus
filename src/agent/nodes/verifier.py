@@ -1,4 +1,4 @@
-"""Verifier node — cross-references facts and assigns confidence scores (Claude Sonnet 4.6)."""
+"""Verifier node — cross-references facts and assigns confidence scores (Gemini 2.5 Pro)."""
 
 from __future__ import annotations
 
@@ -49,6 +49,7 @@ async def verifier_node(state: dict[str, Any], *, router: ModelRouter) -> dict[s
         structured_output=VerifierOutput,
     )
     elapsed_ms = int((time.monotonic() - start) * 1000)
+    usage = router.last_usage
 
     output = result if isinstance(result, VerifierOutput) else VerifierOutput()
 
@@ -63,6 +64,8 @@ async def verifier_node(state: dict[str, Any], *, router: ModelRouter) -> dict[s
         input_summary=f"Verified {len(new_facts)} new facts (skipped {already_verified_count} already verified)",
         output_summary=f"{len(verified)} verified, {len(output.unverified_claims)} unverified, {len(contradictions)} contradictions",
         duration_ms=elapsed_ms,
+        tokens_consumed=usage["tokens"],
+        cost_usd=usage["cost"],
     )
 
     writer({
@@ -79,5 +82,7 @@ async def verifier_node(state: dict[str, Any], *, router: ModelRouter) -> dict[s
         "contradictions": contradictions,
         # Advance the cursor so the next verifier call skips already-processed facts
         "facts_verified_count": already_verified_count + len(new_facts),
+        # Signal to supervisor that verification is done for this phase
+        "current_phase_verified": True,
         "audit_log": [audit.model_dump()],
     }

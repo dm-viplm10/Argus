@@ -43,6 +43,27 @@ YIELD rel
 RETURN rel
 """
 
+# Fallback used when APOC is unavailable — preserves all typed relationships
+# without dynamic Cypher. Each template matches a relationship type the analyzer
+# is instructed to produce (see analyzer prompt).
+_TYPED_REL_TEMPLATE = "MATCH (a {{name: $from_name}}), (b {{name: $to_name}}) MERGE (a)-[r:{rel_type}]->(b) SET r += $properties RETURN r"
+
+TYPED_RELATIONSHIP_QUERIES: dict[str, str] = {
+    rel_type: _TYPED_REL_TEMPLATE.format(rel_type=rel_type)
+    for rel_type in (
+        "WORKS_AT",
+        "OWNS",
+        "BOARD_MEMBER_OF",
+        "ASSOCIATED_WITH",
+        "LITIGATED",
+        "MANAGES",
+        "INVESTED_IN",
+        "LOCATED_IN",
+        "MENTIONED_IN",
+    )
+}
+
+# Kept for reference / migration; no longer used at runtime
 CREATE_RELATIONSHIP_NO_APOC = """
 MATCH (a {name: $from_name}), (b {name: $to_name})
 MERGE (a)-[r:ASSOCIATED_WITH]->(b)
