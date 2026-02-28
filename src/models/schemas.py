@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ── Extracted data models ────────────────────────────────────────────
@@ -20,10 +20,26 @@ class ExtractedFact(BaseModel):
     entities_involved: list[str] = Field(default_factory=list)
 
 
+class EntityAttributes(BaseModel):
+    """Common attributes for entities (Gemini-compatible strict schema)."""
+    model_config = ConfigDict(extra="forbid")
+    
+    role: str = ""
+    title: str = ""
+    position: str = ""
+    location: str = ""
+    founded: str = ""
+    url: str = ""
+    industry: str = ""
+    description: str = ""
+    date: str = ""
+    value: str = ""
+
+
 class ExtractedEntity(BaseModel):
     name: str
     type: Literal["person", "organization", "fund", "location", "event", "document"]
-    attributes: dict = Field(default_factory=dict)
+    attributes: EntityAttributes = Field(default_factory=EntityAttributes)
     sources: list[str] = Field(default_factory=list)
 
 

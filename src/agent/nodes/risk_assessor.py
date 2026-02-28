@@ -55,7 +55,7 @@ async def risk_assessor_node(state: dict[str, Any], *, router: ModelRouter) -> d
         node="risk_assessor",
         action="assess_risk",
         timestamp=datetime.now(timezone.utc).isoformat(),
-        model_used="x-ai/grok-3",
+        model_used="anthropic/claude-sonnet-4.6",
         input_summary=f"Assessed {len(verified_facts)} verified facts and {len(relationships)} relationships",
         output_summary=f"Identified {len(flags)} risk flags, overall score: {output.overall_risk_score}",
         duration_ms=elapsed_ms,

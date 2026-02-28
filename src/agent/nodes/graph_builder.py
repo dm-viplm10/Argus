@@ -121,5 +121,6 @@ async def graph_builder_node(
     return {
         "graph_nodes_created": nodes_created,
         "graph_relationships_created": rels_created,
+        "phase_complete": True,  # Mark phase as complete after graph building
         "audit_log": [audit.model_dump()],
     }

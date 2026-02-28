@@ -24,6 +24,31 @@ async def supervisor_node(state: dict[str, Any], *, router: ModelRouter) -> dict
     iteration = state.get("iteration_count", 0) + 1
     writer({"node": "supervisor", "status": "deciding", "iteration": iteration})
 
+    # Check for cooperative cancellation before making an LLM call
+    research_id = state.get("research_id", "")
+    if research_id:
+        try:
+            from src.api.v1.research import clear_cancellation, is_job_cancelled
+
+            if is_job_cancelled(research_id):
+                logger.info("supervisor_cancelled", research_id=research_id, iteration=iteration)
+                clear_cancellation(research_id)
+                writer({"node": "supervisor", "status": "cancelled"})
+                return {
+                    "current_agent": "FINISH",
+                    "next_action": "FINISH",
+                    "supervisor_instructions": "",
+                    "iteration_count": iteration,
+                    "audit_log": [AuditEntry(
+                        node="supervisor",
+                        action="cancelled",
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        output_summary="Job cancelled by user",
+                    ).model_dump()],
+                }
+        except ImportError:
+            pass
+
     prompt = SUPERVISOR_SYSTEM_PROMPT.format(
         target_name=state.get("target_name", ""),
         target_context=state.get("target_context", ""),
@@ -70,7 +95,7 @@ async def supervisor_node(state: dict[str, Any], *, router: ModelRouter) -> dict
         node="supervisor",
         action="route_decision",
         timestamp=datetime.now(timezone.utc).isoformat(),
-        model_used="anthropic/claude-sonnet-4.6",
+        model_used="openai/gpt-4.1",
         output_summary=f"Routed to {decision.next_agent}: {decision.reasoning}",
         duration_ms=elapsed_ms,
     )

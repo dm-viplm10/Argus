@@ -78,7 +78,7 @@ class WebScrapeTool(BaseTool):
                 text = self._extract_text(html, url)
                 if text:
                     logger.info("scrape_success", url=url, length=len(text))
-                    return text[:50_000]  # Cap at 50k chars
+                    return text[:15_000]  # Cap at 15k chars to keep ReAct context manageable
                 return f"[No extractable content at {url}]"
 
             except httpx.HTTPStatusError as exc:

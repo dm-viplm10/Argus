@@ -18,11 +18,16 @@ Evaluate the current state and pick the SINGLE best next action:
 4. If search results exist but not analyzed → "analyzer"
 5. If extracted facts >= 5 for current phase → "verifier"
 6. If verified facts exist but no risk assessment → "risk_assessor"
-7. If risk assessment done but graph not built → "graph_builder"
-8. If current phase complete AND more phases remain → increment phase, route to "query_refiner"
-9. If all phases complete → "synthesizer"
-10. If synthesizer identifies critical gaps AND iteration_count < max_phases → "planner"
-11. If final report is complete → "FINISH"
+7. If risk assessment done AND phase not complete → "graph_builder"
+8. If phase complete AND current_phase < max_phases → "query_refiner" (advances to next phase)
+9. If phase complete AND current_phase >= max_phases → "synthesizer"
+10. If final report exists → "FINISH"
+
+## Important Rules
+
+- Phase is complete ONLY when graph_builder has finished (Phase Complete: True)
+- Do NOT route to graph_builder if Phase Complete is already True
+- Do NOT route to same agent twice in a row unless explicitly needed
 
 ## Current State Summary
 
