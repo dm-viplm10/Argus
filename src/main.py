@@ -10,13 +10,20 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.api.dependencies import set_checkpointer, set_neo4j_conn, set_registry
+from src.api.dependencies import set_checkpointer, set_neo4j_conn, set_redis_client, set_registry
 from src.api.router import api_router
 from src.config import get_settings
 from src.graph_db.connection import Neo4jConnection
 from src.graph_db.schema import init_schema
 from src.models.llm_registry import LLMRegistry
 from src.utils.logging import get_logger, setup_logging
+
+import redis.asyncio as aioredis
+
+try:
+    from langgraph_checkpoint_redis import AsyncRedisSaver
+except ImportError:
+    AsyncRedisSaver = None
 
 logger = get_logger(__name__)
 
@@ -37,15 +44,22 @@ async def lifespan(app: FastAPI):
     registry = LLMRegistry(settings)
     set_registry(registry)
 
-    # Redis checkpointer
-    try:
-        from langgraph_checkpoint_redis import AsyncRedisSaver
+    # Shared Redis client (for job status tracking across app + worker)
+    redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    set_redis_client(redis_client)
+    logger.info("redis_client_initialized")
 
-        checkpointer = AsyncRedisSaver(redis_url=settings.REDIS_URL)
-        set_checkpointer(checkpointer)
-        logger.info("redis_checkpointer_initialized")
-    except Exception as exc:
-        logger.warning("redis_checkpointer_unavailable", error=str(exc))
+    # Redis checkpointer
+    if AsyncRedisSaver is not None:
+        try:
+            checkpointer = AsyncRedisSaver(redis_url=settings.REDIS_URL)
+            set_checkpointer(checkpointer)
+            logger.info("redis_checkpointer_initialized")
+        except Exception as exc:
+            logger.warning("redis_checkpointer_unavailable", error=str(exc))
+            set_checkpointer(None)
+    else:
+        logger.warning("redis_checkpointer_unavailable", error="langgraph-checkpoint-redis not installed")
         set_checkpointer(None)
 
     logger.info("app_started")
@@ -53,6 +67,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     await neo4j_conn.close()
+    await redis_client.aclose()
     logger.info("app_stopped")
 
 
