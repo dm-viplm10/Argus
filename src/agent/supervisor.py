@@ -55,6 +55,11 @@ async def supervisor_node(state: dict[str, Any], *, router: ModelRouter) -> dict
         objectives=", ".join(state.get("research_objectives", [])),
         current_phase=state.get("current_phase", 0),
         max_phases=state.get("max_phases", 5),
+        phase_searched=state.get("current_phase_searched", False),
+        phase_analyzed=state.get("current_phase_analyzed", False),
+        phase_verified=state.get("current_phase_verified", False),
+        phase_risk_assessed=state.get("current_phase_risk_assessed", False),
+        phase_complete=state.get("phase_complete", False),
         facts_count=len(state.get("extracted_facts", [])),
         entities_count=len(state.get("entities", [])),
         verified_count=len(state.get("verified_facts", [])),
@@ -64,9 +69,7 @@ async def supervisor_node(state: dict[str, Any], *, router: ModelRouter) -> dict
         pending_queries_count=len(state.get("pending_queries", [])),
         iteration_count=iteration,
         has_plan=bool(state.get("research_plan")),
-        has_risk=bool(state.get("risk_flags")),
         has_report=bool(state.get("final_report")),
-        phase_complete=state.get("phase_complete", False),
     )
 
     start = time.monotonic()
@@ -79,6 +82,7 @@ async def supervisor_node(state: dict[str, Any], *, router: ModelRouter) -> dict
         structured_output=SupervisorDecision,
     )
     elapsed_ms = int((time.monotonic() - start) * 1000)
+    usage = router.last_usage
 
     decision = result if isinstance(result, SupervisorDecision) else SupervisorDecision(
         next_agent="FINISH", reasoning="Failed to parse decision"
@@ -98,6 +102,8 @@ async def supervisor_node(state: dict[str, Any], *, router: ModelRouter) -> dict
         model_used="openai/gpt-4.1",
         output_summary=f"Routed to {decision.next_agent}: {decision.reasoning}",
         duration_ms=elapsed_ms,
+        tokens_consumed=usage["tokens"],
+        cost_usd=usage["cost"],
     )
 
     writer({
@@ -115,11 +121,16 @@ async def supervisor_node(state: dict[str, Any], *, router: ModelRouter) -> dict
         "audit_log": [audit.model_dump()],
     }
 
-    # Handle phase advancement
+    # Advance to next phase when graph_builder has just completed a phase.
+    # Reset ALL per-phase flags so the new phase starts with a clean slate.
     if decision.next_agent == "query_refiner" and state.get("phase_complete"):
         new_phase = state.get("current_phase", 1) + 1
         updates["current_phase"] = new_phase
         updates["phase_complete"] = False
+        updates["current_phase_searched"] = False
+        updates["current_phase_analyzed"] = False
+        updates["current_phase_verified"] = False
+        updates["current_phase_risk_assessed"] = False
         logger.info("phase_advanced", new_phase=new_phase)
 
     return updates

@@ -25,20 +25,22 @@ async def analyzer_node(state: dict[str, Any], *, router: ModelRouter) -> dict[s
     current_phase = state.get("current_phase", 1)
     writer({"node": "analyzer", "status": "started", "phase": current_phase})
 
-    # Delta: only process results added since the last analyzer run
+    # Delta: only process search results added since the last analyzer run
     all_results = state.get("search_results", [])
     already_analyzed = state.get("search_results_analyzed_count", 0)
     new_results = all_results[already_analyzed:]
 
-    # Scraped content is always targeted at the current phase — process all of it
-    scraped_content = state.get("scraped_content", [])
+    # Delta: only process scraped content added since the last analyzer run
+    all_scraped = state.get("scraped_content", [])
+    already_scraped = state.get("scraped_content_analyzed_count", 0)
+    new_scraped = all_scraped[already_scraped:]
 
     content_blocks: list[str] = []
     for sr in new_results:
         c = sr.get("content", "")
         if c:
             content_blocks.append(c)
-    for sc in scraped_content:
+    for sc in new_scraped:
         c = sc.get("content", "")
         if c:
             content_blocks.append(c)
@@ -76,6 +78,7 @@ async def analyzer_node(state: dict[str, Any], *, router: ModelRouter) -> dict[s
         structured_output=AnalyzerOutput,
     )
     elapsed_ms = int((time.monotonic() - start) * 1000)
+    usage = router.last_usage
 
     output = result if isinstance(result, AnalyzerOutput) else AnalyzerOutput()
 
@@ -88,9 +91,11 @@ async def analyzer_node(state: dict[str, Any], *, router: ModelRouter) -> dict[s
         action="extract_entities",
         timestamp=datetime.now(timezone.utc).isoformat(),
         model_used="google/gemini-2.5-pro",
-        input_summary=f"Processed {len(content_blocks)} content blocks",
+        input_summary=f"Processed {len(content_blocks)} content blocks ({len(new_results)} search results, {len(new_scraped)} scraped)",
         output_summary=f"Extracted {len(facts)} facts, {len(entities)} entities, {len(relationships)} relationships",
         duration_ms=elapsed_ms,
+        tokens_consumed=usage["tokens"],
+        cost_usd=usage["cost"],
     )
 
     writer({
@@ -105,7 +110,10 @@ async def analyzer_node(state: dict[str, Any], *, router: ModelRouter) -> dict[s
         "extracted_facts": facts,
         "entities": entities,
         "relationships": relationships,
-        # Advance the cursor so the next analyzer call skips already-processed results
+        # Advance both cursors so re-runs skip already-processed content
         "search_results_analyzed_count": already_analyzed + len(new_results),
+        "scraped_content_analyzed_count": already_scraped + len(new_scraped),
+        # Signal to supervisor that this phase's search results have been analyzed
+        "current_phase_analyzed": True,
         "audit_log": [audit.model_dump()],
     }

@@ -16,6 +16,7 @@ from src.graph_db.queries import (
     MERGE_ORGANIZATION,
     MERGE_PERSON,
     CREATE_RELATIONSHIP_NO_APOC,
+    TYPED_RELATIONSHIP_QUERIES,
 )
 from src.models.schemas import AuditEntry
 from src.utils.logging import get_logger
@@ -44,8 +45,9 @@ async def graph_builder_node(
     relationships = state.get("relationships", [])
     research_id = state.get("research_id", "unknown")
 
-    nodes_created: list[str] = list(state.get("graph_nodes_created", []))
-    rels_created: list[str] = list(state.get("graph_relationships_created", []))
+    # Track only net-new writes this invocation; the state reducer accumulates.
+    nodes_created: list[str] = []
+    rels_created: list[str] = []
 
     start = time.monotonic()
 
@@ -77,7 +79,7 @@ async def graph_builder_node(
     for rel in relationships:
         from_name = rel.get("source_entity", "")
         to_name = rel.get("target_entity", "")
-        rel_type = rel.get("relationship_type", "ASSOCIATED_WITH")
+        rel_type = rel.get("relationship_type", "ASSOCIATED_WITH").upper()
 
         if not from_name or not to_name:
             continue
@@ -89,17 +91,33 @@ async def graph_builder_node(
             "research_id": research_id,
         }
 
-        try:
-            await neo4j_conn.execute_write(
-                CREATE_RELATIONSHIP_NO_APOC,
-                from_name=from_name,
-                to_name=to_name,
-                rel_type=rel_type,
-                properties=props,
-            )
-            rels_created.append(f"{from_name}-[{rel_type}]->{to_name}")
-        except Exception as exc:
-            logger.error("graph_rel_create_failed", rel=f"{from_name}->{to_name}", error=str(exc))
+        # Use a typed query if the relationship type is known; fall back to
+        # ASSOCIATED_WITH (with rel_subtype property) for anything unexpected.
+        query = TYPED_RELATIONSHIP_QUERIES.get(rel_type)
+        if query:
+            try:
+                await neo4j_conn.execute_write(
+                    query,
+                    from_name=from_name,
+                    to_name=to_name,
+                    properties=props,
+                )
+                rels_created.append(f"{from_name}-[{rel_type}]->{to_name}")
+            except Exception as exc:
+                logger.error("graph_rel_create_failed", rel=f"{from_name}->{to_name}", rel_type=rel_type, error=str(exc))
+        else:
+            logger.warning("unknown_rel_type_fallback", rel_type=rel_type, from_name=from_name, to_name=to_name)
+            try:
+                await neo4j_conn.execute_write(
+                    CREATE_RELATIONSHIP_NO_APOC,
+                    from_name=from_name,
+                    to_name=to_name,
+                    rel_type=rel_type,
+                    properties=props,
+                )
+                rels_created.append(f"{from_name}-[{rel_type}]->{to_name}")
+            except Exception as exc:
+                logger.error("graph_rel_create_failed", rel=f"{from_name}->{to_name}", rel_type=rel_type, error=str(exc))
 
     elapsed_ms = int((time.monotonic() - start) * 1000)
 

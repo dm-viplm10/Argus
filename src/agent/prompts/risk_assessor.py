@@ -23,7 +23,16 @@ Name: {target_name}
 Context: {target_context}
 </target_info>
 
-## Verified Findings
+## Already Identified Risk Flags (from prior phases)
+
+<existing_flags>
+{existing_flags_json}
+</existing_flags>
+
+IMPORTANT: Do NOT re-flag risks already listed above. Only identify NEW risk flags
+from the new verified findings below that are not already captured.
+
+## New Verified Findings (this phase only)
 
 <findings>
 {findings_json}
@@ -49,6 +58,7 @@ Context: {target_context}
   offshore structures, related-party transactions.
 
 Think step by step. Consider each category independently.
+Cross-reference the new findings with existing flags to identify escalating patterns.
 
 ## Example
 
@@ -61,7 +71,7 @@ Respond ONLY with valid JSON:
 {{
   "risk_flags": [
     {{
-      "flag": "Description of the risk flag",
+      "flag": "Description of the NEW risk flag",
       "category": "legal|financial|reputational|behavioral|network",
       "severity": "low|medium|high|critical",
       "confidence": 0.0-1.0,
@@ -71,6 +81,6 @@ Respond ONLY with valid JSON:
     }}
   ],
   "overall_risk_score": 0.0-1.0,
-  "summary": "2-3 sentence summary of overall risk profile"
+  "summary": "2-3 sentence summary of overall risk profile including prior phase findings"
 }}
 """

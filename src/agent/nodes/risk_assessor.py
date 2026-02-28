@@ -1,4 +1,4 @@
-"""Risk Assessor node — identifies red flags and risk patterns (Grok 3)."""
+"""Risk Assessor node — identifies red flags and risk patterns (Claude Sonnet 4.6)."""
 
 from __future__ import annotations
 
@@ -19,21 +19,33 @@ logger = get_logger(__name__)
 
 
 async def risk_assessor_node(state: dict[str, Any], *, router: ModelRouter) -> dict[str, Any]:
-    """Evaluate all findings for risk flags using Grok 3's unfiltered analysis."""
+    """Evaluate new verified findings for risk flags, avoiding duplicate flags from prior phases."""
     writer = get_stream_writer()
     writer({"node": "risk_assessor", "status": "started"})
 
-    verified_facts = state.get("verified_facts", [])
+    # Delta: only assess verified facts added since the last risk_assessor run
+    all_verified = state.get("verified_facts", [])
+    already_assessed = state.get("risk_assessed_facts_count", 0)
+    new_verified = all_verified[already_assessed:]
+
+    if not new_verified:
+        writer({"node": "risk_assessor", "status": "skipped", "reason": "no new verified facts"})
+        return {}
+
+    existing_flags = state.get("risk_flags", [])
     relationships = state.get("relationships", [])
 
-    if not verified_facts:
-        writer({"node": "risk_assessor", "status": "skipped", "reason": "no verified facts"})
-        return {}
+    # Summarise existing flags for the prompt to prevent re-flagging
+    existing_flags_summary = [
+        {"flag": f.get("flag", ""), "category": f.get("category", ""), "severity": f.get("severity", "")}
+        for f in existing_flags
+    ]
 
     prompt = RISK_ASSESSOR_SYSTEM_PROMPT.format(
         target_name=state["target_name"],
         target_context=state.get("target_context", ""),
-        findings_json=json.dumps(verified_facts, indent=2)[:40_000],
+        existing_flags_json=json.dumps(existing_flags_summary, indent=2)[:10_000] if existing_flags_summary else "None identified yet.",
+        findings_json=json.dumps(new_verified, indent=2)[:40_000],
         relationships_json=json.dumps(relationships, indent=2)[:20_000],
     )
 
@@ -47,6 +59,7 @@ async def risk_assessor_node(state: dict[str, Any], *, router: ModelRouter) -> d
         structured_output=RiskAssessment,
     )
     elapsed_ms = int((time.monotonic() - start) * 1000)
+    usage = router.last_usage
 
     output = result if isinstance(result, RiskAssessment) else RiskAssessment()
     flags = [f.model_dump() for f in output.risk_flags]
@@ -56,20 +69,26 @@ async def risk_assessor_node(state: dict[str, Any], *, router: ModelRouter) -> d
         action="assess_risk",
         timestamp=datetime.now(timezone.utc).isoformat(),
         model_used="anthropic/claude-sonnet-4.6",
-        input_summary=f"Assessed {len(verified_facts)} verified facts and {len(relationships)} relationships",
-        output_summary=f"Identified {len(flags)} risk flags, overall score: {output.overall_risk_score}",
+        input_summary=f"Assessed {len(new_verified)} new verified facts ({already_assessed} already assessed), {len(existing_flags)} existing flags provided as context",
+        output_summary=f"Identified {len(flags)} new risk flags, overall score: {output.overall_risk_score}",
         duration_ms=elapsed_ms,
+        tokens_consumed=usage["tokens"],
+        cost_usd=usage["cost"],
     )
 
     writer({
         "node": "risk_assessor",
         "status": "complete",
-        "risk_flags": len(flags),
+        "new_risk_flags": len(flags),
         "overall_score": output.overall_risk_score,
     })
 
     return {
         "risk_flags": flags,
         "overall_risk_score": output.overall_risk_score,
+        # Advance cursor so the next call only sees facts from subsequent phases
+        "risk_assessed_facts_count": already_assessed + len(new_verified),
+        # Signal to supervisor that risk assessment is done for this phase
+        "current_phase_risk_assessed": True,
         "audit_log": [audit.model_dump()],
     }
