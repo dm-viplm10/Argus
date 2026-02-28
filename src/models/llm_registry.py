@@ -26,7 +26,7 @@ class ModelSpec:
 
 MODEL_CONFIG: dict[str, ModelSpec] = {
     "supervisor": ModelSpec(
-        slug="anthropic/claude-sonnet-4.6",
+        slug="openai/gpt-4.1",
         temperature=0.1,
         max_tokens=2048,
         purpose="Agent orchestration and routing decisions",
@@ -50,13 +50,13 @@ MODEL_CONFIG: dict[str, ModelSpec] = {
         purpose="Fact and entity extraction from large content",
     ),
     "verifier": ModelSpec(
-        slug="anthropic/claude-sonnet-4.6",
+        slug="google/gemini-2.5-pro",
         temperature=0.0,
-        max_tokens=4096,
+        max_tokens=16384,
         purpose="Cross-reference verification",
     ),
     "risk_assessor": ModelSpec(
-        slug="x-ai/grok-3",
+        slug="anthropic/claude-sonnet-4.6",
         temperature=0.5,
         max_tokens=4096,
         purpose="Unfiltered risk and red flag identification",

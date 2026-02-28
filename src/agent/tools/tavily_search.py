@@ -13,14 +13,15 @@ if TYPE_CHECKING:
 def create_tavily_search_tool(settings: Settings) -> TavilySearch:
     """Create a configured Tavily search tool.
 
-    Uses the official langchain-tavily package with advanced search depth,
-    raw content extraction, and configurable result limits.
+    Uses the official langchain-tavily package with advanced search depth.
+    Raw content is disabled to keep ReAct agent context within token limits;
+    full content is fetched selectively via web_scrape when needed.
     """
     return TavilySearch(
-        max_results=settings.MAX_RESULTS_PER_QUERY,
+        max_results=min(settings.MAX_RESULTS_PER_QUERY, 5),
         search_depth="advanced",
         topic="general",
-        include_raw_content=True,
+        include_raw_content=False,
         include_images=False,
     )
 
@@ -28,9 +29,9 @@ def create_tavily_search_tool(settings: Settings) -> TavilySearch:
 def create_tavily_finance_tool(settings: Settings) -> TavilySearch:
     """Tavily search tuned for financial research phases."""
     return TavilySearch(
-        max_results=settings.MAX_RESULTS_PER_QUERY,
+        max_results=min(settings.MAX_RESULTS_PER_QUERY, 5),
         search_depth="advanced",
         topic="finance",
-        include_raw_content=True,
+        include_raw_content=False,
         include_images=False,
     )

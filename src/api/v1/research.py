@@ -36,6 +36,20 @@ _jobs: dict[str, dict[str, Any]] = {}
 # Tracks live asyncio tasks for inline (non-Celery) runs so they can be cancelled
 _inline_tasks: dict[str, asyncio.Task] = {}
 
+# Shared cancellation set — checked by the supervisor node between every step.
+# This enables cooperative cancellation that actually stops the LLM pipeline.
+_cancelled_jobs: set[str] = set()
+
+
+def is_job_cancelled(research_id: str) -> bool:
+    """Check if a research job has been marked for cancellation."""
+    return research_id in _cancelled_jobs
+
+
+def clear_cancellation(research_id: str) -> None:
+    """Remove a job from the cancellation set after cleanup."""
+    _cancelled_jobs.discard(research_id)
+
 
 async def _redis_set_job(research_id: str, data: dict) -> None:
     """Write job metadata to Redis. Falls back silently if Redis unavailable."""
@@ -171,6 +185,7 @@ async def _run_research_inline(
 
     finally:
         _inline_tasks.pop(research_id, None)
+        clear_cancellation(research_id)
 
 
 @router.get("/{research_id}", response_model=ResearchResult)
@@ -258,6 +273,10 @@ async def cancel_research(research_id: str) -> dict:
             status_code=409,
             detail=f"Cannot cancel a job with status '{status}'",
         )
+
+    # Signal cooperative cancellation so the supervisor stops routing
+    _cancelled_jobs.add(research_id)
+    logger.info("cancellation_signalled", research_id=research_id)
 
     # --- Celery path ---
     task_id = (redis_job or {}).get("task_id") or (mem_job or {}).get("task_id")

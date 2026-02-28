@@ -59,7 +59,7 @@ async def verifier_node(state: dict[str, Any], *, router: ModelRouter) -> dict[s
         node="verifier",
         action="cross_reference",
         timestamp=datetime.now(timezone.utc).isoformat(),
-        model_used="anthropic/claude-sonnet-4.6",
+        model_used="google/gemini-2.5-pro",
         input_summary=f"Verified {len(new_facts)} new facts (skipped {already_verified_count} already verified)",
         output_summary=f"{len(verified)} verified, {len(output.unverified_claims)} unverified, {len(contradictions)} contradictions",
         duration_ms=elapsed_ms,

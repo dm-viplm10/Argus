@@ -45,7 +45,8 @@ For each piece of content, extract:
    - Forums, social media: 0.2-0.4
 
 2. **Entities**: People, organizations, funds, locations, events, and documents
-   mentioned in connection with the target.
+   mentioned in connection with the target. For attributes, use: role, title, 
+   position, location, founded, url, industry, description, date, value.
 
 3. **Relationships**: Connections between entities with evidence and type.
 
@@ -82,7 +83,18 @@ Respond ONLY with valid JSON:
     {{
       "name": "...",
       "type": "person|organization|fund|location|event|document",
-      "attributes": {{}},
+      "attributes": {{
+        "role": "...",
+        "title": "...",
+        "position": "...",
+        "location": "...",
+        "founded": "...",
+        "url": "...",
+        "industry": "...",
+        "description": "...",
+        "date": "...",
+        "value": "..."
+      }},
       "sources": ["url1"]
     }}
   ],
