@@ -35,6 +35,11 @@ MODEL_CONFIG: dict[str, ModelSpec] = {
         temperature=0.3,
         purpose="Research plan generation",
     ),
+    "phase_strategist": ModelSpec(
+        slug="openai/gpt-4.1",
+        temperature=0.3,
+        purpose="Dynamic phase strategy based on Phase 1 findings",
+    ),
     "query_refiner": ModelSpec(
         slug="openai/gpt-4.1-mini",
         temperature=0.4,

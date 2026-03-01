@@ -9,6 +9,7 @@ from langgraph.graph import END, START, StateGraph
 
 from src.agent.edges import route_from_supervisor
 from src.agent.nodes.graph_builder import graph_builder_node
+from src.agent.nodes.phase_strategist import phase_strategist_node
 from src.agent.nodes.planner import planner_node
 from src.agent.nodes.query_refiner import query_refiner_node
 from src.agent.nodes.risk_assessor import risk_assessor_node
@@ -38,6 +39,7 @@ def build_research_graph(
     # Bind dependencies to node functions
     _supervisor = functools.partial(supervisor_node, router=router)
     _planner = functools.partial(planner_node, router=router)
+    _phase_strategist = functools.partial(phase_strategist_node, router=router)
     _query_refiner = functools.partial(query_refiner_node, router=router)
     _search_and_analyze = functools.partial(
         search_and_analyze_node, registry=registry, settings=settings
@@ -51,6 +53,7 @@ def build_research_graph(
 
     graph.add_node("supervisor", _supervisor)
     graph.add_node("planner", _planner)
+    graph.add_node("phase_strategist", _phase_strategist)
     graph.add_node("query_refiner", _query_refiner)
     graph.add_node("search_and_analyze", _search_and_analyze)
     graph.add_node("verifier", _verifier)
@@ -67,6 +70,7 @@ def build_research_graph(
         route_from_supervisor,
         {
             "planner": "planner",
+            "phase_strategist": "phase_strategist",
             "query_refiner": "query_refiner",
             "search_and_analyze": "search_and_analyze",
             "verifier": "verifier",
@@ -80,6 +84,7 @@ def build_research_graph(
     # Every sub-agent returns to supervisor after completion
     for node_name in [
         "planner",
+        "phase_strategist",
         "query_refiner",
         "search_and_analyze",
         "verifier",

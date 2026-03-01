@@ -55,6 +55,7 @@ async def supervisor_node(state: dict[str, Any], *, router: ModelRouter) -> dict
         objectives=", ".join(state.get("research_objectives", [])),
         current_phase=state.get("current_phase", 0),
         max_phases=state.get("max_phases", 5),
+        dynamic_phases=state.get("dynamic_phases", False),
         phase_searched=state.get("current_phase_searched", False),
         phase_verified=state.get("current_phase_verified", False),
         phase_risk_assessed=state.get("current_phase_risk_assessed", False),
