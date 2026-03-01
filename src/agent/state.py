@@ -36,6 +36,7 @@ class ResearchState(TypedDict, total=False):
     research_plan: list[dict]
     current_phase: int
     max_phases: int
+    dynamic_phases: bool  # When True, phase_strategist decides phases after Phase 1
     phase_complete: bool
     pending_queries: list[str]
 

@@ -50,7 +50,7 @@ def mock_registry(settings):
         mock_model.model_name = "test-model"
 
         for task in [
-            "supervisor", "planner", "query_refiner", "search_and_analyze",
+            "supervisor", "planner", "phase_strategist", "query_refiner", "search_and_analyze",
             "verifier", "risk_assessor", "synthesizer",
         ]:
             registry._models[task] = mock_model
@@ -76,6 +76,7 @@ def sample_state() -> dict:
         "research_objectives": ["biographical", "financial", "risk_assessment"],
         "current_phase": 1,
         "max_phases": 5,
+        "dynamic_phases": False,
         "iteration_count": 0,
         "phase_complete": False,
         "research_plan": [],

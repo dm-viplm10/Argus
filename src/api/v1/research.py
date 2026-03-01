@@ -46,7 +46,7 @@ _cancelled_jobs: set[str] = set()
 # Node names registered in the StateGraph — used to filter astream_events
 # down to graph-level node transitions (ignoring internal sub-chains).
 _GRAPH_NODES = frozenset({
-    "supervisor", "planner", "query_refiner", "search_and_analyze",
+    "supervisor", "planner", "phase_strategist", "query_refiner", "search_and_analyze",
     "verifier", "risk_assessor", "graph_builder", "synthesizer",
 })
 
@@ -209,13 +209,19 @@ async def _run_research_inline(
     try:
         graph = compile_research_graph(settings, registry, neo4j, checkpointer=checkpointer)
 
+        # When max_depth is omitted, use dynamic phase strategy: start with Phase 1 only,
+        # then phase_strategist decides additional phases based on surface report findings.
+        use_dynamic_phases = request.max_depth is None
+        max_phases = 1 if use_dynamic_phases else request.max_depth
+
         initial_state = {
             "research_id": research_id,
             "target_name": request.target_name,
             "target_context": request.target_context,
             "research_objectives": request.objectives,
             "current_phase": 0,
-            "max_phases": request.max_depth,
+            "max_phases": max_phases,
+            "dynamic_phases": use_dynamic_phases,
             "iteration_count": 0,
             "phase_complete": False,
             "supervisor_instructions": "",

@@ -18,6 +18,7 @@ from langgraph.config import get_stream_writer
 from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel, Field
 
+from src.agent.prompts.search_and_analyze import SEARCH_ANALYZE_SYSTEM_PROMPT
 from src.agent.tools.tavily_search import create_tavily_search_tool
 from src.agent.tools.web_scrape import WebScrapeTool
 from src.config import Settings
@@ -82,61 +83,13 @@ def submit_findings(
     )
 
 
-SEARCH_ANALYZE_SYSTEM = """\
-You are an expert web researcher and intelligence analyst conducting OSINT investigation.
-Your job is to execute search queries, scrape high-value sources, analyze all content,
-and submit structured findings in one pass.
-
-## Workflow
-
-1. Execute EVERY query using the tavily_search tool.
-2. Review the results — identify URLs with the highest-quality information
-   (official sources, news articles, regulatory filings, professional profiles).
-3. For important URLs where the snippet is insufficient, use web_scrape to get full content.
-   Avoid scraping the same URL twice.
-4. As you gather content, build up your understanding of facts, entities, and relationships
-   relevant to the target.
-5. Once ALL queries are executed and high-value URLs are scraped, call submit_findings
-   with your complete structured analysis.
-
-## Extraction Guidelines
-
-**Facts** — specific, verifiable claims. Assign confidence based on source quality:
-- Official filings, government records: 0.85–0.95
-- Major news outlets: 0.70–0.85
-- Industry publications: 0.60–0.75
-- Personal websites, LinkedIn: 0.40–0.60
-- Forums, social media: 0.20–0.40
-
-**Entities** — every person, organization, fund, location, event, or document mentioned
-in connection with the target. Completeness matters for network mapping.
-
-**Relationships** — connections between entities with supporting evidence.
-
-## Rules
-- NEVER fabricate facts not present in the content.
-- NEVER assign confidence > 0.5 to single-source unverified claims.
-- NEVER skip entities even if they seem minor.
-- If a page is irrelevant to the target, still note the null result and move on.
-- Call submit_findings exactly ONCE at the very end.
-
-## Phase Context
-
-{phase_context}
-
-## Supervisor Instructions
-
-{supervisor_instructions}
-"""
-
-
 def _build_agent(registry: LLMRegistry, settings: Settings, phase_context: str, supervisor_instructions: str):
     """Construct the ReAct agent with all three tools bound for this invocation."""
     model = registry.get_model("search_and_analyze")
     tavily_tool = create_tavily_search_tool(settings)
     scrape_tool = WebScrapeTool()
 
-    system_prompt = SEARCH_ANALYZE_SYSTEM.format(
+    system_prompt = SEARCH_ANALYZE_SYSTEM_PROMPT.format(
         phase_context=phase_context,
         supervisor_instructions=supervisor_instructions or "No specific instructions.",
     )
@@ -218,7 +171,9 @@ async def search_and_analyze_node(
     queries_text = "\n".join(f"- {q}" for q in queries_batch)
     user_prompt = (
         f"Target: {state['target_name']} ({state.get('target_context', '')})\n\n"
-        f"Execute these queries, analyze all results, then call submit_findings:\n{queries_text}"
+        f"1) Execute these queries with tavily_search. 2) For promising URLs in the results, call web_scrape to fetch full content — do not just list URLs and stop. "
+        f"3) After gathering content, call submit_findings with your findings. Your final tool call must be submit_findings — no text-only conclusion.\n\n"
+        f"Queries to execute:\n{queries_text}"
     )
 
     agent = _build_agent(

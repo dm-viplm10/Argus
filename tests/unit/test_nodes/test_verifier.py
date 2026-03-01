@@ -91,13 +91,13 @@ async def test_verifier_active_verification(
 
 @pytest.mark.asyncio
 async def test_verifier_skips_when_no_facts(sample_state, mock_registry, settings):
-    """Test that the verifier returns empty when there are no new facts."""
+    """Test that the verifier sets current_phase_verified=True when there are no facts (prevents infinite loop)."""
     with patch("src.agent.nodes.verifier.get_stream_writer", return_value=lambda x: None):
         from src.agent.nodes.verifier import verifier_node
 
         result = await verifier_node(sample_state, registry=mock_registry, settings=settings)
 
-    assert result == {}
+    assert result == {"current_phase_verified": True}
 
 
 @pytest.mark.asyncio

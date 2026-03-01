@@ -83,6 +83,22 @@ class ResearchPlan(BaseModel):
     rationale: str = ""
 
 
+class PhaseStrategyDecision(BaseModel):
+    """Output of phase_strategist when dynamically deciding next phases."""
+
+    action: Literal["add_phases", "synthesize"] = Field(
+        description="Whether to add more phases or proceed to synthesis",
+    )
+    phases_to_add: list[ResearchPhase] = Field(
+        default_factory=list,
+        description="Phases to append (only when action is add_phases)",
+    )
+    reasoning: str = Field(
+        default="",
+        description="Brief rationale for the decision based on Phase 1 findings",
+    )
+
+
 # ── Verification models ─────────────────────────────────────────────
 
 

@@ -14,7 +14,12 @@ class ResearchRequest(BaseModel):
     objectives: list[str] = Field(
         default_factory=lambda: ["biographical", "financial", "risk_assessment", "connections"],
     )
-    max_depth: int = Field(default=5, ge=1, le=10)
+    max_depth: int | None = Field(
+        default=None,
+        ge=1,
+        le=10,
+        description="Research depth (phases). If omitted or null, phases are decided dynamically based on Phase 1 findings.",
+    )
 
 
 class ResearchResponse(BaseModel):

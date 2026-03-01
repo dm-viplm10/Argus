@@ -22,6 +22,7 @@ def route_from_supervisor(state: dict[str, Any]) -> str:
         "verifier",
         "risk_assessor",
         "graph_builder",
+        "phase_strategist",
         "synthesizer",
     }
 

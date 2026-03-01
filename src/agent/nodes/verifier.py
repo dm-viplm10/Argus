@@ -137,7 +137,8 @@ async def verifier_node(
 
     if not new_facts:
         writer({"node": "verifier", "status": "skipped", "reason": "no new facts to verify"})
-        return {}
+        # Must set current_phase_verified=True so supervisor progresses; otherwise infinite loop
+        return {"current_phase_verified": True}
 
     # Build the system prompt
     system_prompt = VERIFIER_SYSTEM_PROMPT.format(
