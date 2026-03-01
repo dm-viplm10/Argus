@@ -10,6 +10,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langgraph.config import get_stream_writer
+from langgraph.errors import GraphRecursionError
 from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel, Field
 
@@ -23,6 +24,8 @@ from src.utils.logging import get_logger
 logger = get_logger(__name__)
 
 MAX_VERIFICATION_SEARCHES = 10
+# Cap ReAct tool-call rounds so the verifier cannot loop search→scrape→submit indefinitely.
+VERIFIER_RECURSION_LIMIT = 28
 
 
 class _VerificationSchema(BaseModel):
@@ -60,7 +63,7 @@ def submit_verification(
     and cross-referencing. Do NOT call this after each search or scrape —
     run all tavily_search and web_scrape calls first, then submit everything
     in a single call. Include ALL facts — not just the ones you searched for.
-    """
+    After calling this tool, do not perform any more searches or scrapes."""
     return (
         f"Verification recorded: {len(verified_facts)} facts assessed, "
         f"{len(unverified_claims)} unverified, {len(contradictions)} contradictions."
@@ -122,8 +125,8 @@ class VerifierAgent(ReActAgent):
             f"that need verification:\n\n{facts_json}\n\n"
             f"1) Reason about which claims are most important to verify independently. "
             f"2) Run tavily_search and web_scrape for the ones that matter — do multiple searches/scrapes as needed. "
-            f"3) After gathering all evidence, call submit_verification with your complete results. "
-            f"Your final tool call must be submit_verification — do NOT call it after each search; only call it ONCE at the end."
+            f"3) When you have gathered enough evidence (or reached the search budget), call submit_verification ONCE with your complete results. "
+            f"4) After calling submit_verification, do NOT perform any more searches or scrapes. Your final tool call must be submit_verification — call it only once, at the very end."
         )
 
         model = self._registry.get_model("verifier")
@@ -137,18 +140,86 @@ class VerifierAgent(ReActAgent):
         )
 
         start = time.monotonic()
-        result = await agent.ainvoke({"messages": [HumanMessage(content=user_prompt)]})
+        config = {"recursion_limit": VERIFIER_RECURSION_LIMIT}
+        try:
+            result = await agent.ainvoke(
+                {"messages": [HumanMessage(content=user_prompt)]},
+                config=config,
+            )
+        except GraphRecursionError:
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            logger.warning(
+                "verifier_recursion_limit_hit",
+                limit=VERIFIER_RECURSION_LIMIT,
+                elapsed_ms=elapsed_ms,
+            )
+            writer({"node": "verifier", "status": "recursion_limit", "message": "Stopped after max steps"})
+            model_spec = MODEL_CONFIG.get("verifier")
+            model_slug = model_spec.slug if model_spec else "unknown"
+            return {
+                "verified_facts": [],
+                "unverified_claims": [f.get("fact", "") for f in new_facts],
+                "contradictions": [],
+                "facts_verified_count": already_verified_count + len(new_facts),
+                "current_phase_verified": True,
+                "audit_log": [
+                    AuditEntry(
+                        node="verifier",
+                        action="active_verification",
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        model_used=model_slug,
+                        input_summary=f"Verified {len(new_facts)} new facts (recursion limit hit)",
+                        output_summary="Stopped at recursion limit; no verification submitted",
+                        duration_ms=elapsed_ms,
+                    ).model_dump()
+                ],
+            }
+
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
         messages = result.get("messages", [])
         verified, unverified_claims, contradictions = _extract_verification(messages)
 
+        # If the agent stopped without calling submit_verification, force one more round
+        # with only the submit tool so results are always recorded.
+        if not verified and not unverified_claims:
+            logger.warning(
+                "verifier_no_submit",
+                facts_count=len(new_facts),
+                message="Agent did not call submit_verification; forcing submit-only round",
+            )
+            writer({"node": "verifier", "status": "forcing_submit"})
+            submit_only_agent = create_react_agent(
+                model=model,
+                tools=[submit_verification],
+                prompt=SystemMessage(
+                    content="You must call the submit_verification tool with your complete verification results. "
+                    "Include every fact from the conversation in either verified_facts or unverified_claims. "
+                    "Do not output a text summary only — you must call the tool."
+                ),
+            )
+            force_result = await submit_only_agent.ainvoke(
+                {
+                    "messages": messages
+                    + [
+                        HumanMessage(
+                            content="You did not call submit_verification. You MUST call the submit_verification tool now with your complete assessment of all facts discussed above. "
+                            "Include every fact in either verified_facts or unverified_claims. This is required."
+                        )
+                    ]
+                },
+                config={"recursion_limit": 5},
+            )
+            messages = force_result.get("messages", [])
+            verified, unverified_claims, contradictions = _extract_verification(messages)
+
         if not verified and not unverified_claims:
             logger.warning(
                 "verifier_no_results",
                 facts_count=len(new_facts),
-                reason="submit_verification not called or returned empty",
+                reason="submit_verification not called or returned empty; treating all as unverified",
             )
+            unverified_claims = [f.get("fact", "") for f in new_facts if f.get("fact")]
 
         model_spec = MODEL_CONFIG.get("verifier")
         model_slug = model_spec.slug if model_spec else "unknown"

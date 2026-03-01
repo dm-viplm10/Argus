@@ -11,3 +11,4 @@ build/
 .cursor/
 src/evaluation/reports/
 *.log
+uv.lock

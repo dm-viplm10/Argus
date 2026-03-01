@@ -1,89 +1,593 @@
 {
   "target": "Timothy Overturf",
-  "context": "CEO of Sisu Capital",
+  "context": "CEO and sole owner of Sisu Capital LLC, a California investment advisory firm. Subject of a 2023 SEC enforcement action for securities fraud. Also co-owns Arcata Theatre Lounge via Joseppi's LLC. Son of Hansueli 'Hans' Overturf, himself a former financial advisor with an extensive regulatory history.",
+  "dataset_version": "2.0",
+  "created_date": "2026-03-01",
   "expected_facts": [
     {
-      "fact": "CEO/founder of Sisu Capital",
-      "category": "professional",
-      "difficulty": "easy",
-      "search_depth_required": 1
-    },
-    {
-      "fact": "Sisu Capital is an investment management firm",
-      "category": "professional",
-      "difficulty": "easy",
-      "search_depth_required": 1
-    },
-    {
-      "fact": "Based in or operates from the United States",
+      "fact": "Timothy Overturf full legal name is Timothy Silas Prugh Overturf",
       "category": "biographical",
       "difficulty": "easy",
-      "search_depth_required": 1
+      "search_depth_required": 1,
+      "source_id": "BIO-001"
     },
     {
-      "fact": "Has a professional profile on LinkedIn or similar platform",
+      "fact": "Timothy Overturf is a resident of Arcata California",
+      "category": "biographical",
+      "difficulty": "easy",
+      "search_depth_required": 1,
+      "source_id": "BIO-002"
+    },
+    {
+      "fact": "Timothy Overturf born approximately 1995 was 28 years old at time of 2023 SEC complaint",
+      "category": "biographical",
+      "difficulty": "easy",
+      "search_depth_required": 1,
+      "source_id": "BIO-003"
+    },
+    {
+      "fact": "Timothy Overturf was 18 years old when he founded Sisu Capital in October 2013",
+      "category": "biographical",
+      "difficulty": "easy",
+      "search_depth_required": 1,
+      "source_id": "BIO-003"
+    },
+    {
+      "fact": "Sisu Capital LLC was founded in October 2013 by Timothy Overturf",
       "category": "professional",
       "difficulty": "easy",
-      "search_depth_required": 1
+      "search_depth_required": 1,
+      "source_id": "SISU-001"
     },
     {
-      "fact": "Has experience in financial services or investment management",
+      "fact": "Timothy Overturf is the sole legal owner and CEO of Sisu Capital",
       "category": "professional",
       "difficulty": "easy",
-      "search_depth_required": 1
+      "search_depth_required": 1,
+      "source_id": "SISU-002"
     },
     {
-      "fact": "Sisu Capital may be registered with SEC or state regulators",
+      "fact": "Timothy Overturf served as Chief Compliance Officer of Sisu Capital from 2016 to 2018 and again in 2021",
+      "category": "professional",
+      "difficulty": "easy",
+      "search_depth_required": 2,
+      "source_id": "SISU-003"
+    },
+    {
+      "fact": "Sisu Capital was registered as investment adviser with State of California from November 2014 to December 2020",
+      "category": "regulatory",
+      "difficulty": "easy",
+      "search_depth_required": 1,
+      "source_id": "SISU-004"
+    },
+    {
+      "fact": "Sisu Capital registration was revoked by State of California in January 2021",
+      "category": "regulatory",
+      "difficulty": "easy",
+      "search_depth_required": 1,
+      "source_id": "SISU-005"
+    },
+    {
+      "fact": "Timothy Overturf continued advising clients after Sisu registration was revoked",
+      "category": "regulatory",
+      "difficulty": "easy",
+      "search_depth_required": 2,
+      "source_id": "SISU-006"
+    },
+    {
+      "fact": "Sisu Capital served approximately 42 high-net-worth clients with assets under management up to 51.7 million dollars",
       "category": "financial",
-      "difficulty": "medium",
-      "search_depth_required": 2
+      "difficulty": "easy",
+      "search_depth_required": 2,
+      "source_id": "SISU-007"
     },
     {
-      "fact": "Corporate entity registration details",
+      "fact": "Sisu Capital principal place of business was in Mill Valley California",
+      "category": "professional",
+      "difficulty": "easy",
+      "search_depth_required": 1,
+      "source_id": "SISU-008"
+    },
+    {
+      "fact": "Sisu charged clients annual fee 2% of assets under management plus 20% performance fee",
       "category": "financial",
-      "difficulty": "medium",
-      "search_depth_required": 3
+      "difficulty": "easy",
+      "search_depth_required": 2,
+      "source_id": "SEC-010"
     },
     {
-      "fact": "Any prior professional roles or career history",
+      "fact": "SEC filed complaint August 2023 in federal court San Francisco charging Sisu Capital Timothy Overturf and Hansueli Hans Overturf",
+      "category": "legal",
+      "difficulty": "easy",
+      "search_depth_required": 1,
+      "source_id": "SEC-001"
+    },
+    {
+      "fact": "SEC charged Sisu Capital and Timothy Overturf with violating antifraud provisions Sections 206(1) and 206(2) of the Investment Advisers Act of 1940",
+      "category": "legal",
+      "difficulty": "easy",
+      "search_depth_required": 1,
+      "source_id": "SEC-002"
+    },
+    {
+      "fact": "Hans Overturf was charged with aiding and abetting his son Timothy violations",
+      "category": "legal",
+      "difficulty": "easy",
+      "search_depth_required": 1,
+      "source_id": "SEC-003"
+    },
+    {
+      "fact": "SEC alleged violations occurred from December 2017 through at least May 2021",
+      "category": "legal",
+      "difficulty": "easy",
+      "search_depth_required": 1,
+      "source_id": "SEC-004"
+    },
+    {
+      "fact": "SEC alleges Sisu Capital allowed Hans Overturf to give investment advice to clients while Hans was suspended from providing investment advisory services by State of California",
+      "category": "legal",
+      "difficulty": "easy",
+      "search_depth_required": 2,
+      "source_id": "SEC-005"
+    },
+    {
+      "fact": "SEC alleges they traded contrary to client instructions investing client funds in thinly-traded bank stock",
+      "category": "legal",
+      "difficulty": "easy",
+      "search_depth_required": 2,
+      "source_id": "SEC-006"
+    },
+    {
+      "fact": "Sisu and Timothy Overturf received at least 2 million dollars in payments from clients while acting contrary to their interests",
+      "category": "financial",
+      "difficulty": "easy",
+      "search_depth_required": 2,
+      "source_id": "SEC-008"
+    },
+    {
+      "fact": "Timothy Overturf received approximately 858000 dollars in owner draws and loans from the company from 2017 to 2019",
+      "category": "financial",
+      "difficulty": "easy",
+      "search_depth_required": 2,
+      "source_id": "SEC-009"
+    },
+    {
+      "fact": "Hansueli Hans Overturf is Timothy Overturf father",
+      "category": "biographical",
+      "difficulty": "medium",
+      "search_depth_required": 2,
+      "source_id": "HANS-001"
+    },
+    {
+      "fact": "Hans Overturf grew up in Switzerland and completed apprenticeship with postal service in Zurich starting 1989",
+      "category": "biographical",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "HANS-002"
+    },
+    {
+      "fact": "Hans Overturf served in Swiss Armed Forces rising to rank of First Lieutenant leading platoon of 43 troops",
+      "category": "biographical",
+      "difficulty": "medium",
+      "search_depth_required": 5,
+      "source_id": "HANS-003"
+    },
+    {
+      "fact": "Hans Overturf attended Humboldt State University graduated 1999 degree Economics Summa Cum Laude",
+      "category": "biographical",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "HANS-004"
+    },
+    {
+      "fact": "Hans Overturf was hired by Morgan Stanley in Eureka CA as financial advisor and received National Directors Award",
       "category": "professional",
       "difficulty": "medium",
-      "search_depth_required": 2
+      "search_depth_required": 4,
+      "source_id": "HANS-005"
     },
     {
-      "fact": "Board memberships or advisory roles",
+      "fact": "Hans Overturf established financial services practice through Raymond James Financial Services in Arcata CA in July 2003",
+      "category": "professional",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "HANS-006"
+    },
+    {
+      "fact": "Hans Overturf opened Overturf Financial Services Inc with branches in Arcata Mill Valley and San Francisco California",
+      "category": "professional",
+      "difficulty": "medium",
+      "search_depth_required": 3,
+      "source_id": "HANS-007"
+    },
+    {
+      "fact": "Hans Overturf was arrested March 2004 by Del Norte County Sheriff alongside John Russavage and Michael Harder for bilking elderly Crescent City couple with dementia out of 730000 dollars invested in Redwood Parks Lodge",
+      "category": "legal",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "HANS-008"
+    },
+    {
+      "fact": "Hans Overturf agreed to pay 420000 dollars of the 730000 invested and criminal charges were dropped August 2004",
+      "category": "legal",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "HANS-009"
+    },
+    {
+      "fact": "Redwood Parks Lodge Co venture to build luxury lodging near Redwood National Park in Orick created 2002 owned 66 acres near Elk Meadow Prairie Creek",
+      "category": "professional",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "HANS-010"
+    },
+    {
+      "fact": "Hans Overturf was suspended by State of California from acting as investment advisor in 2011",
+      "category": "regulatory",
+      "difficulty": "medium",
+      "search_depth_required": 3,
+      "source_id": "HANS-011"
+    },
+    {
+      "fact": "FINRA suspended and fined Hans Overturf 10000 dollars in 2011 for engaging in undisclosed business activities",
+      "category": "regulatory",
+      "difficulty": "medium",
+      "search_depth_required": 3,
+      "source_id": "HANS-012"
+    },
+    {
+      "fact": "Hans Overturf was suspended again by State of California from 2017 to December 7 2019",
+      "category": "regulatory",
+      "difficulty": "medium",
+      "search_depth_required": 3,
+      "source_id": "HANS-013"
+    },
+    {
+      "fact": "Hans Overturf used email signatures identifying himself as Trader and Head of Business Development at Sisu Capital",
+      "category": "professional",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "HANS-014"
+    },
+    {
+      "fact": "Hans Overturf now lives in Switzerland as of 2023",
+      "category": "biographical",
+      "difficulty": "medium",
+      "search_depth_required": 3,
+      "source_id": "HANS-015"
+    },
+    {
+      "fact": "Hans Overturf referred many of his personal investment advisory clients to his son Sisu Capital",
+      "category": "professional",
+      "difficulty": "medium",
+      "search_depth_required": 3,
+      "source_id": "HANS-016"
+    },
+    {
+      "fact": "Hans Overturf represented himself Pro Se in the SEC lawsuit",
+      "category": "legal",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "HANS-017"
+    },
+    {
+      "fact": "Timothy Overturf purchased the Arcata Theatre Lounge in August 2019 with business partner Joseph Ostini",
+      "category": "professional",
+      "difficulty": "medium",
+      "search_depth_required": 2,
+      "source_id": "ATL-001"
+    },
+    {
+      "fact": "Theatre purchase made under Joseppis LLC newly formed company",
+      "category": "professional",
+      "difficulty": "medium",
+      "search_depth_required": 3,
+      "source_id": "ATL-002"
+    },
+    {
+      "fact": "Arcata Theatre Lounge purchased for 1135000 dollars originally listed 1850000 dollars in 2016",
+      "category": "financial",
+      "difficulty": "medium",
+      "search_depth_required": 3,
+      "source_id": "ATL-003"
+    },
+    {
+      "fact": "Joseph Ostini was 27 and Timothy Overturf was 23 at time of Arcata Theatre Lounge purchase",
+      "category": "biographical",
+      "difficulty": "medium",
+      "search_depth_required": 3,
+      "source_id": "ATL-004"
+    },
+    {
+      "fact": "Arcata Theatre Lounge is a historic 1938 Art Deco theatre at 1036 G St Arcata California",
+      "category": "professional",
+      "difficulty": "medium",
+      "search_depth_required": 2,
+      "source_id": "ATL-005"
+    },
+    {
+      "fact": "NLRB ordered Arcata Theatre Lounge to offer bartender Rebecca Maynard her job back after Timothy Overturf fired her October 7 2021 for complaining about tipping policy",
+      "category": "legal",
+      "difficulty": "medium",
+      "search_depth_required": 3,
+      "source_id": "ATL-007"
+    },
+    {
+      "fact": "Judge Gerald Etchingham found ATL violated Section 8(a)(1) of the National Labor Relations Act",
+      "category": "legal",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "ATL-008"
+    },
+    {
+      "fact": "NLRB ruling was enforced by the Ninth Circuit Court of Appeals",
+      "category": "legal",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "ATL-009"
+    },
+    {
+      "fact": "Overturf told fired bartender her talking about wages brought down morale and amounted to insubordination",
+      "category": "behavioral",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "ATL-010"
+    },
+    {
+      "fact": "SEC case assigned to Judge Jacqueline Scott Corley Northern District of California",
+      "category": "legal",
+      "difficulty": "medium",
+      "search_depth_required": 3,
+      "source_id": "SEC-014"
+    },
+    {
+      "fact": "Timothy Overturf was served on August 6 2024 with answer due August 27 2024",
+      "category": "legal",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "SEC-015"
+    },
+    {
+      "fact": "Pre-settlement conference held September 17 2024 with Hansueli Overturf representing himself Pro Se",
+      "category": "legal",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "SEC-016"
+    },
+    {
+      "fact": "SEC case referred to Magistrate Judge Lisa Cisneros for settlement proceedings",
+      "category": "legal",
+      "difficulty": "medium",
+      "search_depth_required": 4,
+      "source_id": "SEC-017"
+    },
+    {
+      "fact": "Timothy Overturf posted on LinkedIn about blockchain technologies presentation at Virtual Affairs speaking about bitcoin ledgers and consensus protocols",
       "category": "professional",
       "difficulty": "hard",
-      "search_depth_required": 4
+      "search_depth_required": 6,
+      "source_id": "CRYPTO-003"
     },
     {
-      "fact": "Any regulatory filings, actions, or compliance history",
+      "fact": "Timothy Overturf LinkedIn posts reference cryptoMountainRocks event in Davos and sisusolution.io",
+      "category": "professional",
+      "difficulty": "hard",
+      "search_depth_required": 6,
+      "source_id": "CRYPTO-001"
+    },
+    {
+      "fact": "Timothy Overturf had meeting with TNO Netherlands organisation in The Hague to discuss token sales and initial coin offerings",
+      "category": "professional",
+      "difficulty": "hard",
+      "search_depth_required": 6,
+      "source_id": "CRYPTO-002"
+    },
+    {
+      "fact": "SEC complaint alleges undisclosed plan to leverage bank charter to accept crypto assets",
       "category": "legal",
       "difficulty": "hard",
-      "search_depth_required": 4
+      "search_depth_required": 4,
+      "source_id": "CRYPTO-004"
+    },
+    {
+      "fact": "Sisu Capital website was sisucapital.io using .io domain",
+      "category": "professional",
+      "difficulty": "hard",
+      "search_depth_required": 5,
+      "source_id": "CRYPTO-005"
+    },
+    {
+      "fact": "Sisu Capital parent company shared executive with Sisu Extracts a California cannabis extraction company",
+      "category": "professional",
+      "difficulty": "hard",
+      "search_depth_required": 6,
+      "source_id": "CANN-001"
+    },
+    {
+      "fact": "John Figueiredo was registered financial advisor with Sisu Capital from 2015 to 2016 and is former CEO of both Sisu Capital and Sisu Extracts cannabis company",
+      "category": "professional",
+      "difficulty": "hard",
+      "search_depth_required": 6,
+      "source_id": "CANN-002"
+    },
+    {
+      "fact": "Sisu Extracts is now employee-owned cannabis company based in Humboldt County California",
+      "category": "professional",
+      "difficulty": "hard",
+      "search_depth_required": 6,
+      "source_id": "CANN-004"
+    },
+    {
+      "fact": "Hans Overturf purchased unsuitable inverse short-term volatility futures product designed for short-term trading but held for months or over a year",
+      "category": "financial",
+      "difficulty": "hard",
+      "search_depth_required": 5,
+      "source_id": "SEC-011"
+    },
+    {
+      "fact": "In 2018 the broker-dealer that held Sisu clients funds terminated its relationship with the company",
+      "category": "financial",
+      "difficulty": "hard",
+      "search_depth_required": 5,
+      "source_id": "SEC-012"
+    },
+    {
+      "fact": "Bank stock purchases were part of undisclosed plan to amass shares to propose crypto banking partnership to the bank",
+      "category": "legal",
+      "difficulty": "hard",
+      "search_depth_required": 5,
+      "source_id": "SEC-007"
+    },
+    {
+      "fact": "Timothy Overturf was difficult to serve in SEC lawsuit not served despite case filed August 2023 finally served August 6 2024",
+      "category": "behavioral",
+      "difficulty": "hard",
+      "search_depth_required": 5,
+      "source_id": "RISK-013"
     }
   ],
   "expected_entities": [
     {"name": "Timothy Overturf", "type": "person"},
-    {"name": "Sisu Capital", "type": "organization"}
+    {"name": "Hansueli Overturf", "type": "person"},
+    {"name": "Hans Overturf", "type": "person"},
+    {"name": "Joseph Ostini", "type": "person"},
+    {"name": "John Figueiredo", "type": "person"},
+    {"name": "Rebecca Maynard", "type": "person"},
+    {"name": "John Russavage", "type": "person"},
+    {"name": "Reto Gadient", "type": "person"},
+    {"name": "Sisu Capital", "type": "organization"},
+    {"name": "Arcata Theatre Lounge", "type": "organization"},
+    {"name": "Joseppis LLC", "type": "organization"},
+    {"name": "Overturf Financial Services", "type": "organization"},
+    {"name": "Sisu Extracts", "type": "organization"},
+    {"name": "Redwood Parks Lodge", "type": "organization"},
+    {"name": "Securities and Exchange Commission", "type": "organization"},
+    {"name": "FINRA", "type": "organization"},
+    {"name": "National Labor Relations Board", "type": "organization"},
+    {"name": "Morgan Stanley", "type": "organization"},
+    {"name": "Raymond James Financial Services", "type": "organization"},
+    {"name": "Humboldt State University", "type": "organization"},
+    {"name": "TNO", "type": "organization"},
+    {"name": "California DFPI", "type": "organization"}
   ],
   "expected_relationships": [
-    {
-      "source": "Timothy Overturf",
-      "target": "Sisu Capital",
-      "type": "WORKS_AT"
-    }
+    {"source": "Timothy Overturf", "target": "Sisu Capital", "type": "FOUNDER_CEO_OWNER"},
+    {"source": "Timothy Overturf", "target": "Hans Overturf", "type": "SON_OF"},
+    {"source": "Timothy Overturf", "target": "Arcata Theatre Lounge", "type": "OWNER"},
+    {"source": "Timothy Overturf", "target": "Joseppis LLC", "type": "CO_OWNER"},
+    {"source": "Timothy Overturf", "target": "Overturf Financial Services", "type": "FORMER_EMPLOYEE"},
+    {"source": "Hans Overturf", "target": "Sisu Capital", "type": "UNDISCLOSED_ADVISOR_TRADER"},
+    {"source": "Hans Overturf", "target": "Overturf Financial Services", "type": "FOUNDER_OWNER"},
+    {"source": "Hans Overturf", "target": "Redwood Parks Lodge", "type": "INVESTOR_CO_ACCUSED"},
+    {"source": "Hans Overturf", "target": "Morgan Stanley", "type": "FORMER_EMPLOYEE"},
+    {"source": "Hans Overturf", "target": "Raymond James Financial Services", "type": "FORMER_AFFILIATED_ADVISOR"},
+    {"source": "Hans Overturf", "target": "FINRA", "type": "SUSPENDED_FINED_2011"},
+    {"source": "Hans Overturf", "target": "California DFPI", "type": "SUSPENDED_2011_AND_2017"},
+    {"source": "Joseph Ostini", "target": "Arcata Theatre Lounge", "type": "CO_OWNER"},
+    {"source": "Joseph Ostini", "target": "Joseppis LLC", "type": "CO_OWNER"},
+    {"source": "John Figueiredo", "target": "Sisu Capital", "type": "FORMER_REGISTERED_ADVISOR"},
+    {"source": "John Figueiredo", "target": "Sisu Extracts", "type": "FORMER_CEO"},
+    {"source": "John Russavage", "target": "Redwood Parks Lodge", "type": "CEO_COFOUNDER"},
+    {"source": "John Russavage", "target": "Hans Overturf", "type": "CO_ACCUSED_2004"},
+    {"source": "Securities and Exchange Commission", "target": "Sisu Capital", "type": "ENFORCEMENT_ACTION_2023"},
+    {"source": "Securities and Exchange Commission", "target": "Timothy Overturf", "type": "DEFENDANT_2023"},
+    {"source": "Securities and Exchange Commission", "target": "Hans Overturf", "type": "DEFENDANT_2023"},
+    {"source": "National Labor Relations Board", "target": "Arcata Theatre Lounge", "type": "UNFAIR_LABOR_PRACTICE_2023"},
+    {"source": "Rebecca Maynard", "target": "Arcata Theatre Lounge", "type": "FORMER_EMPLOYEE_FIRED_2021"},
+    {"source": "Timothy Overturf", "target": "TNO", "type": "MET_REGARDING_ICOS"},
+    {"source": "Sisu Capital", "target": "Sisu Extracts", "type": "SHARED_EXECUTIVE_FIGUEIREDO"}
   ],
   "expected_risk_flags": [
     {
-      "category": "behavioral",
-      "description": "Any resume or credential inconsistencies",
-      "difficulty": "hard"
+      "category": "regulatory",
+      "description": "SEC enforcement action for securities fraud Sections 206(1) and 206(2) of Investment Advisers Act filed August 2023",
+      "difficulty": "easy",
+      "severity": "critical",
+      "source_id": "RISK-001"
     },
     {
-      "category": "legal",
-      "description": "Any regulatory actions or litigation",
-      "difficulty": "hard"
+      "category": "regulatory",
+      "description": "Operated investment advisory firm after state registration was revoked in January 2021",
+      "difficulty": "easy",
+      "severity": "critical",
+      "source_id": "RISK-003"
+    },
+    {
+      "category": "family_association",
+      "description": "Father Hans Overturf arrested 2004 elder fraud FINRA suspension 2011 California suspension 2011 and 2017 to 2019",
+      "difficulty": "medium",
+      "severity": "critical",
+      "source_id": "RISK-002"
+    },
+    {
+      "category": "fiduciary",
+      "description": "Allowed suspended advisor father to communicate with clients and make investment decisions while knowing about the suspension",
+      "difficulty": "medium",
+      "severity": "critical",
+      "source_id": "RISK-005"
+    },
+    {
+      "category": "fiduciary",
+      "description": "Traded contrary to explicit client instructions purchasing bank stock when client repeatedly instructed to sell",
+      "difficulty": "medium",
+      "severity": "critical",
+      "source_id": "RISK-006"
+    },
+    {
+      "category": "pattern",
+      "description": "Intergenerational pattern of financial misconduct father elder fraud 2004 FINRA violations 2011 joint SEC action 2017 to 2021",
+      "difficulty": "medium",
+      "severity": "critical",
+      "source_id": "RISK-010"
+    },
+    {
+      "category": "labor",
+      "description": "NLRB unfair labor practice retaliatory firing of bartender who complained about wages tipping policy enforced by Ninth Circuit Court of Appeals",
+      "difficulty": "medium",
+      "severity": "moderate",
+      "source_id": "RISK-004"
+    },
+    {
+      "category": "youth_experience",
+      "description": "Founded investment advisory firm at age 18 potentially as vehicle for suspended father to continue operating",
+      "difficulty": "medium",
+      "severity": "high",
+      "source_id": "RISK-009"
+    },
+    {
+      "category": "conflict_of_interest",
+      "description": "Undisclosed plan to use client assets to accumulate bank shares in order to propose crypto banking business partnership",
+      "difficulty": "hard",
+      "severity": "critical",
+      "source_id": "RISK-007"
+    },
+    {
+      "category": "suitability",
+      "description": "Purchased complex inverse short-term volatility products for clients and held long-term contrary to product design and client instructions",
+      "difficulty": "hard",
+      "severity": "high",
+      "source_id": "RISK-008"
+    },
+    {
+      "category": "crypto_blockchain",
+      "description": "Involvement in blockchain crypto ventures sisusolution.io Davos events TNO meetings on ICOs alongside traditional investment advisory violations",
+      "difficulty": "hard",
+      "severity": "moderate",
+      "source_id": "RISK-011"
+    },
+    {
+      "category": "cannabis",
+      "description": "Organizational ties between Sisu Capital and cannabis company Sisu Extracts through shared executive John Figueiredo",
+      "difficulty": "hard",
+      "severity": "low",
+      "source_id": "RISK-012"
+    },
+    {
+      "category": "evasion",
+      "description": "Timothy Overturf was difficult to serve in SEC lawsuit not served despite case filed August 2023 finally served August 6 2024",
+      "difficulty": "hard",
+      "severity": "moderate",
+      "source_id": "RISK-013"
     }
   ]
 }
