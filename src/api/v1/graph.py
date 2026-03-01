@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import json
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+
+try:
+    from neo4j.time import DateTime, Date, Time, Duration
+    _NEO4J_TEMPORAL = (DateTime, Date, Time, Duration)
+except ImportError:
+    _NEO4J_TEMPORAL = ()
 
 from src.api.dependencies import get_neo4j
 from src.api.v1.schemas.graph import GraphEdge, GraphNode, GraphResponse
@@ -16,6 +22,17 @@ from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/graph", tags=["graph"])
+
+
+def _sanitize_neo4j_value(value: Any) -> Any:
+    """Convert Neo4j temporal types to JSON-serializable values."""
+    if _NEO4J_TEMPORAL and isinstance(value, _NEO4J_TEMPORAL):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _sanitize_neo4j_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_neo4j_value(v) for v in value]
+    return value
 
 
 @router.get("/{research_id}", response_model=GraphResponse)
@@ -43,7 +60,7 @@ async def get_graph(
                 nodes.append(GraphNode(
                     id=str(n["id"]),
                     labels=n.get("labels", []),
-                    properties=n.get("properties", {}),
+                    properties=_sanitize_neo4j_value(n.get("properties", {})),
                 ))
         for e in record.get("edges", []):
             if e and e.get("source") and e.get("target"):
@@ -51,7 +68,7 @@ async def get_graph(
                     source=str(e["source"]),
                     target=str(e["target"]),
                     type=e.get("type", "UNKNOWN"),
-                    properties=e.get("properties", {}),
+                    properties=_sanitize_neo4j_value(e.get("properties", {})),
                 ))
 
     return GraphResponse(
