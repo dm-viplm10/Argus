@@ -36,13 +36,14 @@ def mock_plan():
 
 
 @pytest.mark.asyncio
-async def test_planner_returns_structured_plan(sample_state, mock_router, mock_plan):
+async def test_planner_returns_structured_plan(sample_state, mock_router, mock_plan, mock_prompt_registry):
     mock_router.invoke = AsyncMock(return_value=mock_plan)
 
     with patch("src.agent.nodes.planner.get_stream_writer", return_value=lambda x: None):
-        from src.agent.nodes.planner import planner_node
+        from src.agent.nodes.planner import PlannerAgent
 
-        result = await planner_node(sample_state, router=mock_router)
+        agent = PlannerAgent(router=mock_router, prompt_registry=mock_prompt_registry)
+        result = await agent.run(sample_state)
 
     assert "research_plan" in result
     assert len(result["research_plan"]) == 2
@@ -52,12 +53,13 @@ async def test_planner_returns_structured_plan(sample_state, mock_router, mock_p
 
 
 @pytest.mark.asyncio
-async def test_planner_handles_empty_response(sample_state, mock_router):
+async def test_planner_handles_empty_response(sample_state, mock_router, mock_prompt_registry):
     mock_router.invoke = AsyncMock(return_value="invalid")
 
     with patch("src.agent.nodes.planner.get_stream_writer", return_value=lambda x: None):
-        from src.agent.nodes.planner import planner_node
+        from src.agent.nodes.planner import PlannerAgent
 
-        result = await planner_node(sample_state, router=mock_router)
+        agent = PlannerAgent(router=mock_router, prompt_registry=mock_prompt_registry)
+        result = await agent.run(sample_state)
 
     assert result["research_plan"] == []

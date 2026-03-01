@@ -78,15 +78,17 @@ def mock_phase_strategist_response_synthesize():
 async def test_phase_strategist_adds_phases(
     phase_1_complete_state,
     mock_router,
+    mock_prompt_registry,
     mock_phase_strategist_response_add_phases,
 ):
     """When strategist returns add_phases, state is updated with new phases."""
     mock_router.invoke = AsyncMock(return_value=mock_phase_strategist_response_add_phases)
 
     with patch("src.agent.nodes.phase_strategist.get_stream_writer", return_value=lambda x: None):
-        from src.agent.nodes.phase_strategist import phase_strategist_node
+        from src.agent.nodes.phase_strategist import PhaseStrategistAgent
 
-        result = await phase_strategist_node(phase_1_complete_state, router=mock_router)
+        agent = PhaseStrategistAgent(router=mock_router, prompt_registry=mock_prompt_registry)
+        result = await agent.run(phase_1_complete_state)
 
     assert "research_plan" in result
     plan = result["research_plan"]
@@ -104,15 +106,17 @@ async def test_phase_strategist_adds_phases(
 async def test_phase_strategist_synthesizes(
     phase_1_complete_state,
     mock_router,
+    mock_prompt_registry,
     mock_phase_strategist_response_synthesize,
 ):
     """When strategist returns synthesize, no phases are added; state ready for synthesizer."""
     mock_router.invoke = AsyncMock(return_value=mock_phase_strategist_response_synthesize)
 
     with patch("src.agent.nodes.phase_strategist.get_stream_writer", return_value=lambda x: None):
-        from src.agent.nodes.phase_strategist import phase_strategist_node
+        from src.agent.nodes.phase_strategist import PhaseStrategistAgent
 
-        result = await phase_strategist_node(phase_1_complete_state, router=mock_router)
+        agent = PhaseStrategistAgent(router=mock_router, prompt_registry=mock_prompt_registry)
+        result = await agent.run(phase_1_complete_state)
 
     assert "research_plan" not in result
     assert "max_phases" not in result

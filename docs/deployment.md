@@ -44,7 +44,7 @@ The system is designed for easy cloud migration:
 
 1. **Neo4j**: Replace with Neo4j Aura (managed)
 2. **Redis**: Replace with ElastiCache or Redis Cloud
-3. **App/Worker**: Deploy as containers (ECS, Cloud Run, K8s)
+3. **App**: Single FastAPI container (research runs inline via asyncio; no separate worker)
 4. **Secrets**: Use cloud secret manager instead of .env
 
 Update `NEO4J_URI`, `REDIS_URL` in environment to point to

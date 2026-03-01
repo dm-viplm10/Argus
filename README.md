@@ -13,31 +13,33 @@ Autonomous AI OSINT (Open Source Intelligence) investigation agent. Conducts mul
                     └────────────┬───────────────┘
                                  │
                     ┌────────────▼───────────────┐
-                    │     Celery Worker           │
-                    │  (Redis broker/backend)     │
+                    │   Inline asyncio tasks      │
+                    │  (Redis checkpoints)        │
                     └────────────┬───────────────┘
                                  │
           ┌──────────────────────▼──────────────────────┐
           │           LangGraph Supervisor               │
-          │         (Claude Sonnet 4.6)                  │
+          │            (GPT-4.1 routing)                 │
           │  Routes to sub-agents based on state         │
           └──┬───┬───┬───┬───┬───┬───┬───┬─────────────┘
              │   │   │   │   │   │   │   │
              ▼   ▼   ▼   ▼   ▼   ▼   ▼   ▼
-          Plan Query Search Analyze Verify Risk Graph Synth
-          ner  Refnr &Scrape zer    er    Assr Bldr  esizer
+          Plan Phase Query Search Verify Risk Graph Synth
+          ner  Strat Refnr &Analyze er    Assr Bldr  esizer
 ```
 
 ### Model Strategy
 
 | Node | Model | Purpose |
 |------|-------|---------|
-| Supervisor | Claude Sonnet 4.6 | Orchestration & routing |
+| Supervisor | GPT-4.1 | Orchestration & routing |
 | Planner | Claude Sonnet 4.6 | Research plan generation |
+| Phase Strategist | GPT-4.1 | Dynamic phase strategy post–Phase 1 |
 | Query Refiner | GPT-4.1-mini | Search query generation |
-| Analyzer | Gemini 2.5 Pro | Entity/fact extraction (1M context) |
-| Verifier | Claude Sonnet 4.6 | Cross-reference verification |
-| Risk Assessor | Grok 3 | Unfiltered risk identification |
+| Search & Analyze | Gemini 2.5 Flash | Web research + fact/entity extraction (ReAct) |
+| Verifier | Gemini 2.5 Pro | Active fact verification via search (ReAct) |
+| Risk Assessor | GPT-4.1 | Red flag identification |
+| Graph Builder | — | Neo4j writes (no LLM) |
 | Synthesizer | Claude Sonnet 4.6 | Report generation |
 
 All models accessed via **OpenRouter** with automatic fallback chains.
@@ -49,7 +51,7 @@ All models accessed via **OpenRouter** with automatic fallback chains.
 - **Search**: Tavily API (AI-native search)
 - **Graph Database**: Neo4j 5 Community
 - **Web Framework**: FastAPI (async)
-- **Task Queue**: Celery + Redis
+- **Execution**: Inline asyncio tasks (SSE streaming)
 - **Checkpointing**: langgraph-checkpoint-redis (durable execution)
 - **Observability**: LangSmith + Structlog
 - **Streaming**: SSE via `get_stream_writer()`
@@ -129,15 +131,16 @@ make graph-export # Export identity graph
 src/
 ├── main.py              # FastAPI app factory
 ├── config.py            # Pydantic Settings
-├── worker.py            # Celery worker
 ├── api/                 # REST API endpoints
 ├── agent/               # LangGraph supervisor + nodes
-│   ├── graph.py         # StateGraph definition
-│   ├── supervisor.py    # Routing logic
-│   ├── nodes/           # 8 sub-agent implementations
-│   ├── prompts/         # Model-specific prompts
+│   ├── base.py          # BaseAgent, StructuredOutputAgent, ReActAgent, ToolNode
+│   ├── graph.py         # StateGraph definition, agent wiring
+│   ├── edges.py         # Conditional routing
+│   ├── state.py         # ResearchState TypedDict
+│   ├── nodes/           # 9 agent classes (planner, supervisor, phase_strategist, etc.)
+│   ├── prompts/         # Prompt templates + PromptRegistry
 │   └── tools/           # Tavily search, web scrape
-├── models/              # LLM registry, router, schemas
+├── models/              # LLM registry, model router, schemas
 ├── services/            # Business logic services
 ├── graph_db/            # Neo4j connection, schema, queries
 ├── evaluation/          # Metrics, ground truth, evaluator
