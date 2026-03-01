@@ -94,10 +94,12 @@ open http://localhost:7474
 | GET | `/api/v1/research/{id}` | Get full results |
 | GET | `/api/v1/research/{id}/status` | Real-time status |
 | GET | `/api/v1/research/{id}/stream` | SSE progress stream |
-| GET | `/api/v1/graph/{id}` | Identity graph (JSON) |
-| GET | `/api/v1/graph/{id}/export?format=graphml` | Export graph |
-| POST | `/api/v1/evaluate` | Run evaluation |
+| GET | `/api/v1/graph/{id}` | Identity graph (JSON, D3-compatible) |
+| GET | `/api/v1/graph/{id}/export?format=...` | Export graph (`json`, `graphml`, `png`, `jpeg`) |
+| POST | `/api/v1/evaluate` | Run evaluation for a completed research job (ground truth + optional LLM judge) |
+| GET | `/api/v1/evaluate/{evaluation_id}/results` | Get evaluation results by ID |
 | GET | `/api/v1/health` | Health check |
+| GET | `/api/v1/ready` | Readiness (Neo4j connectivity) |
 
 ### Start a Research Job
 
@@ -112,6 +114,14 @@ curl -X POST http://localhost:8000/api/v1/research \
   }'
 ```
 
+### Evaluation
+
+Completed research runs can be evaluated against ground truth (e.g. `timothy_overturf.json` in `src/evaluation/ground_truth/`). The API compares pipeline state (facts, entities, relationships, risk flags) to the ground truth and computes metrics (fact precision, network fidelity, risk detection rate, depth score, efficiency, source quality). With **LLM judge** enabled (default), GPT-4.1 scores each metric and produces a full markdown report.
+
+- **API:** `POST /api/v1/evaluate` with `research_id`, optional `ground_truth_file` and `use_llm_judge`; `GET /api/v1/evaluate/{evaluation_id}/results` to fetch a stored result. See [docs/api.md](docs/api.md) for request/response details.
+- **UI:** Use the **Evaluate** tab: enter a completed research ID, optional ground truth filename, run evaluation; metadata is shown as JSON and the evaluation report as markdown.
+- **CLI:** `make evaluate` runs the evaluation script in the container.
+
 ## Development
 
 ```bash
@@ -121,7 +131,7 @@ make logs        # Tail logs
 make test        # Run tests
 make lint        # Run linter
 make format      # Auto-format
-make evaluate    # Run evaluation framework
+make evaluate    # Run evaluation script (ground truth comparison; optional LLM judge via API)
 make graph-export # Export identity graph
 ```
 
@@ -143,7 +153,7 @@ src/
 ├── models/              # LLM registry, model router, schemas
 ├── services/            # Business logic services
 ├── graph_db/            # Neo4j connection, schema, queries
-├── evaluation/          # Metrics, ground truth, evaluator
+├── evaluation/          # Metrics, ground truth files, evaluator, LLM judge
 └── utils/               # Logging, rate limiting, retry
 ```
 

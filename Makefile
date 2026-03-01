@@ -1,4 +1,4 @@
-.PHONY: up down logs test lint format setup verify evaluate graph-export
+.PHONY: up down logs test lint format setup verify evaluate graph-export neo4j-clear
 
 setup:              ## First-time setup: build images, init DB
 	docker compose build
@@ -33,3 +33,6 @@ verify:             ## Verify all infra and API keys
 
 graph-export:       ## Export identity graph
 	docker compose run --rm app python -m scripts.export_graph
+
+neo4j-clear:        ## Delete all nodes and relationships in Neo4j
+	docker compose run --rm app python -m scripts.clear_neo4j

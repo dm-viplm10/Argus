@@ -313,7 +313,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["evaluate"]
 						},
-						"description": "Evaluate a completed research job against ground truth.\n\n**Parameters:**\n- `research_id` (required) — ID of a completed research job\n- `ground_truth_file` (optional, default `timothy_overturf.json`) — filename in the `ground_truth/` directory\n\n**Metrics returned:**\n- `fact_recall`, `fact_precision` — accuracy of extracted facts\n- `entity_coverage` — proportion of known entities found\n- `relationship_accuracy` — correctness of discovered relationships\n- `risk_detection_rate` — proportion of known risks flagged\n- `depth_score` — thoroughness of investigation\n- `efficiency` — quality vs token usage\n- `source_quality` — reliability of sources used"
+						"description": "Evaluate a completed research job against ground truth.\n\n**Parameters:**\n- `research_id` (required) — ID of a completed research job\n- `ground_truth_file` (optional, default `timothy_overturf.json`) — filename in the `ground_truth/` directory\n\n**Metrics returned:**\n- `fact_precision` — verified_facts / (verified_facts + unverified_claims) from state only\n- `network_fidelity` — semantic similarity and importance of discovered entities and relationships (not count-based)\n- `risk_detection_rate` — critical/important verifiable risks flagged (severity-weighted)\n- `depth_score` — critical/important verifiable hard facts\n- `efficiency` — findings per query\n- `source_quality` — reliability of sources used"
 					}
 				},
 				{

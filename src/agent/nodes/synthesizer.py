@@ -57,7 +57,7 @@ class SynthesizerAgent(StructuredOutputAgent):
             node="synthesizer",
             action="generate_report",
             timestamp=datetime.now(timezone.utc).isoformat(),
-            model_used="anthropic/claude-sonnet-4.6",
+            model_used="openai/gpt-4.1",
             output_summary=f"Generated report with {len(report)} characters",
             duration_ms=elapsed_ms,
         )

@@ -51,12 +51,12 @@ MODEL_CONFIG: dict[str, ModelSpec] = {
         purpose="Web research and structured fact/entity extraction in one ReAct pass",
     ),
     "verifier": ModelSpec(
-        slug="google/gemini-2.5-pro",
+        slug="google/gemini-2.5-flash",
         temperature=0.5,
         purpose="Active fact verification via web search and reasoning",
     ),
     "risk_assessor": ModelSpec(
-        slug="openai/gpt-4.1",
+        slug="google/gemini-2.5-pro",
         temperature=0.5,
         purpose="Unfiltered risk and red flag identification",
     ),
@@ -64,6 +64,11 @@ MODEL_CONFIG: dict[str, ModelSpec] = {
         slug="anthropic/claude-sonnet-4.6",
         temperature=0.2,
         purpose="Final report generation",
+    ),
+    "evaluator": ModelSpec(
+        slug="openai/gpt-4.1",
+        temperature=0.6,
+        purpose="LLM-as-judge evaluation scoring against ground truth",
     ),
 }
 

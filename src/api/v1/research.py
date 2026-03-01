@@ -30,6 +30,27 @@ router = APIRouter(prefix="/research", tags=["research"])
 _JOB_KEY = "argus:job:{}"
 _JOB_TTL = 86400 * 7  # 7 days
 
+# Dedicated Redis key for the eval-ready state snapshot (written once on completion).
+_STATE_KEY = "argus:evalstate:{}"
+_STATE_TTL = 86400 * 30  # 30 days — eval data must outlive the research run TTL
+
+# ResearchState fields required by all 8 evaluation metrics.
+# Excludes large/transient fields (urls_visited, pending_queries, internal cursors).
+_EVAL_STATE_FIELDS = frozenset({
+    "research_id", "target_name", "target_context",
+    "verified_facts",           # → fact_precision (from state), depth_score, source_quality
+    "entities",                 # → network_fidelity (with relationships)
+    "relationships",            # → network_fidelity
+    "risk_flags",               # → risk_detection_rate
+    "search_queries_executed",  # → efficiency
+    "extracted_facts", "contradictions", "unverified_claims",
+    "overall_risk_score", "final_report",
+    "audit_log", "errors",
+    "total_tokens_used", "total_cost_usd",
+    "iteration_count", "current_phase", "max_phases",
+    "graph_nodes_created", "graph_relationships_created",
+})
+
 # In-memory fallback for when Redis is unavailable (tests / local dev without Redis)
 _jobs: dict[str, dict[str, Any]] = {}
 
@@ -155,6 +176,66 @@ async def _redis_get_job(research_id: str) -> dict | None:
         return None
 
 
+# ── Eval state persistence helpers ───────────────────────────────────────────
+
+def _serialize_state_for_eval(state: dict) -> dict:
+    """Extract eval-relevant fields and make the dict JSON-safe.
+
+    ResearchState contains ``urls_visited: set[str]`` which is not JSON-serializable.
+    All other annotated list fields are already lists after LangGraph reducer merging.
+    """
+    result: dict[str, Any] = {}
+    for field in _EVAL_STATE_FIELDS:
+        val = state.get(field)
+        if val is None:
+            continue
+        result[field] = list(val) if isinstance(val, set) else val
+    return result
+
+
+async def _redis_set_research_state(research_id: str, state: dict) -> None:
+    """Persist the serialized eval state to Redis under a dedicated key.
+
+    Written once when the research run completes. TTL is 30 days so the
+    evaluation endpoint can retrieve the state even after a server restart.
+    """
+    redis = get_redis()
+    if redis is None:
+        return
+    try:
+        await redis.set(
+            _STATE_KEY.format(research_id),
+            json.dumps(state, default=str),  # default=str handles any residual non-serializable
+            ex=_STATE_TTL,
+        )
+        logger.info(
+            "eval_state_persisted",
+            research_id=research_id,
+            verified_facts=len(state.get("verified_facts", [])),
+            entities=len(state.get("entities", [])),
+            risk_flags=len(state.get("risk_flags", [])),
+        )
+    except Exception as exc:
+        logger.warning("redis_state_write_failed", research_id=research_id, error=str(exc))
+
+
+async def redis_get_research_state(research_id: str) -> dict | None:
+    """Read the persisted eval state from Redis.
+
+    Public (no leading underscore) so the evaluation endpoint can import it.
+    Returns ``None`` if the key does not exist or Redis is unavailable.
+    """
+    redis = get_redis()
+    if redis is None:
+        return None
+    try:
+        raw = await redis.get(_STATE_KEY.format(research_id))
+        return json.loads(raw) if raw else None
+    except Exception as exc:
+        logger.warning("redis_state_read_failed", research_id=research_id, error=str(exc))
+        return None
+
+
 @router.post("", response_model=ResearchResponse)
 async def start_research(
     request: ResearchRequest,
@@ -249,7 +330,21 @@ async def _run_research_inline(
             "audit_log": [],
         }
 
+        # Two configs: full config for graph execution (recursion_limit controls the
+        # LangGraph step counter); minimal config for checkpoint reads (aget_state /
+        # checkpointer.aget only need thread_id — passing extra keys like
+        # recursion_limit can confuse the checkpoint key lookup in some
+        # langgraph-checkpoint-redis versions).
         config = {"configurable": {"thread_id": research_id}, "recursion_limit": 150}
+        _ckpt_config = {"configurable": {"thread_id": research_id}}
+
+        # State keys that are present in a real ResearchState but absent from intermediate
+        # chain events — used to identify the root graph on_chain_end event below.
+        _STATE_INDICATOR_KEYS = frozenset({
+            "verified_facts", "entities", "risk_flags",
+            "extracted_facts", "relationships", "audit_log",
+        })
+        _event_captured_state: dict[str, Any] = {}
 
         async for raw in graph.astream_events(
             initial_state,
@@ -257,13 +352,135 @@ async def _run_research_inline(
             version="v2",
             include_types=["chain", "chat_model", "tool"],
         ):
+            # ── SSE forwarding ────────────────────────────────────────────────
             if queue is not None:
                 sse = _to_sse_event(raw)
                 if sse is not None:
                     await queue.put(sse)
 
-        _jobs[research_id]["status"] = "completed"
-        logger.info("research_completed", research_id=research_id)
+            # ── Opportunistic state capture from the root graph completion ───
+            # When the StateGraph reaches END, astream_events emits a final
+            # on_chain_end for the root LangGraph chain (name NOT in _GRAPH_NODES)
+            # whose data.output is the fully-reduced ResearchState.  We capture it
+            # here so state is always available even if the Redis checkpointer fails.
+            if (
+                raw.get("event") == "on_chain_end"
+                and raw.get("name") not in _GRAPH_NODES
+                and raw.get("name") not in {"", "__start__"}
+            ):
+                output = raw.get("data", {}).get("output")
+                if isinstance(output, dict) and output.keys() & _STATE_INDICATOR_KEYS:
+                    _event_captured_state = output
+                    logger.debug(
+                        "state_observed_in_root_event",
+                        research_id=research_id,
+                        chain_name=raw.get("name"),
+                    )
+
+        # ── Three-path state capture (priority order) ─────────────────────────
+        # Path 1 and 2 read from the Redis checkpointer (AsyncRedisSaver writes
+        # after every node).  Path 3 uses what we captured from the event stream
+        # above and works even without a checkpointer.
+        final_state: dict[str, Any] = {}
+        try:
+            if checkpointer is not None:
+                # Path 1 — graph.aget_state() with a clean, minimal config
+                snapshot = await graph.aget_state(_ckpt_config)
+                if snapshot and snapshot.values:
+                    final_state = _serialize_state_for_eval(snapshot.values)
+                    logger.info(
+                        "state_captured_via_aget_state",
+                        research_id=research_id,
+                        verified_facts=len(final_state.get("verified_facts", [])),
+                    )
+                else:
+                    logger.warning(
+                        "aget_state_returned_empty",
+                        research_id=research_id,
+                        snapshot_none=snapshot is None,
+                        values_empty=snapshot is not None and not snapshot.values,
+                    )
+
+                # Path 2 — direct checkpointer.aget() (same Redis data, different API path)
+                if not final_state:
+                    raw_checkpoint = await checkpointer.aget(_ckpt_config)
+                    if raw_checkpoint and "channel_values" in raw_checkpoint:
+                        final_state = _serialize_state_for_eval(raw_checkpoint["channel_values"])
+                        logger.info(
+                            "state_captured_via_direct_checkpoint",
+                            research_id=research_id,
+                            verified_facts=len(final_state.get("verified_facts", [])),
+                        )
+                    else:
+                        logger.warning(
+                            "direct_checkpoint_also_empty",
+                            research_id=research_id,
+                            raw_checkpoint_none=raw_checkpoint is None,
+                        )
+            else:
+                logger.warning(
+                    "no_checkpointer_eval_state_unavailable",
+                    research_id=research_id,
+                    hint="Install langgraph-checkpoint-redis and set REDIS_URL",
+                )
+
+            # Path 3 — state observed in the root on_chain_end event during streaming
+            # This path is completely independent of the checkpointer.
+            if not final_state and _event_captured_state:
+                final_state = _serialize_state_for_eval(_event_captured_state)
+                logger.info(
+                    "state_captured_from_stream_event",
+                    research_id=research_id,
+                    verified_facts=len(final_state.get("verified_facts", [])),
+                )
+
+            if not final_state:
+                logger.error(
+                    "all_state_capture_paths_failed",
+                    research_id=research_id,
+                    checkpointer_set=checkpointer is not None,
+                    event_state_keys=list(_event_captured_state.keys()) if _event_captured_state else [],
+                )
+
+        except Exception as exc:
+            # State capture failure must never block the completed status update.
+            logger.warning(
+                "final_state_capture_failed",
+                research_id=research_id,
+                error=str(exc),
+                exc_type=type(exc).__name__,
+            )
+
+        # ── Update in-memory job record ───────────────────────────────────────
+        _jobs[research_id].update({
+            "status": "completed",
+            "state": final_state,
+            "final_report": final_state.get("final_report"),
+            "facts_count": len(final_state.get("verified_facts", [])),
+            "entities_count": len(final_state.get("entities", [])),
+            "risk_flags_count": len(final_state.get("risk_flags", [])),
+            "overall_risk_score": final_state.get("overall_risk_score"),
+            "audit_log": final_state.get("audit_log", []),
+        })
+
+        # ── Persist to Redis (survives process restarts) ──────────────────────
+        await _redis_set_research_state(research_id, final_state)
+        await _redis_set_job(research_id, {
+            "status": "completed",
+            "final_report": final_state.get("final_report"),
+            "facts_count": len(final_state.get("verified_facts", [])),
+            "entities_count": len(final_state.get("entities", [])),
+            "risk_flags_count": len(final_state.get("risk_flags", [])),
+            "overall_risk_score": final_state.get("overall_risk_score"),
+        })
+
+        logger.info(
+            "research_completed",
+            research_id=research_id,
+            verified_facts=len(final_state.get("verified_facts", [])),
+            entities=len(final_state.get("entities", [])),
+            risk_flags=len(final_state.get("risk_flags", [])),
+        )
 
     except asyncio.CancelledError:
         _jobs[research_id]["status"] = "cancelled"
