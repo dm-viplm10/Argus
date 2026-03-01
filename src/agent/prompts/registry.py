@@ -1,37 +1,32 @@
 """Prompt registry — central access to all agent prompt templates.
 
-Mirrors the LLMRegistry pattern: task_name -> template, with .format() for templating.
+Loads templates from .md files in the templates/ subdirectory.
+Uses string.Template ($variable) for substitution so markdown files
+can contain literal JSON braces without escaping.
 """
 
 from __future__ import annotations
 
-from src.agent.prompts.phase_strategist import PHASE_STRATEGIST_SYSTEM_PROMPT
-from src.agent.prompts.planner import PLANNER_SYSTEM_PROMPT
-from src.agent.prompts.query_refiner import QUERY_REFINER_PROMPT
-from src.agent.prompts.risk_assessor import RISK_ASSESSOR_SYSTEM_PROMPT
-from src.agent.prompts.search_and_analyze import SEARCH_ANALYZE_SYSTEM_PROMPT
-from src.agent.prompts.supervisor import SUPERVISOR_SYSTEM_PROMPT
-from src.agent.prompts.synthesizer import SYNTHESIZER_SYSTEM_PROMPT
-from src.agent.prompts.verifier import VERIFIER_SYSTEM_PROMPT
+import string
+from pathlib import Path
 
-PROMPT_TEMPLATES: dict[str, str] = {
-    "supervisor": SUPERVISOR_SYSTEM_PROMPT,
-    "planner": PLANNER_SYSTEM_PROMPT,
-    "phase_strategist": PHASE_STRATEGIST_SYSTEM_PROMPT,
-    "query_refiner": QUERY_REFINER_PROMPT,
-    "search_and_analyze": SEARCH_ANALYZE_SYSTEM_PROMPT,
-    "verifier": VERIFIER_SYSTEM_PROMPT,
-    "risk_assessor": RISK_ASSESSOR_SYSTEM_PROMPT,
-    "synthesizer": SYNTHESIZER_SYSTEM_PROMPT,
-}
+_TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
 class PromptRegistry:
-    """Registry for agent prompt templates. Use get_prompt(task, **kwargs) to format."""
+    """Registry for agent prompt templates. Loads from .md files on first use."""
+
+    def __init__(self) -> None:
+        self._cache: dict[str, string.Template] = {}
+
+    def _load(self, task: str) -> string.Template:
+        if task not in self._cache:
+            path = _TEMPLATES_DIR / f"{task}.md"
+            if not path.exists():
+                raise KeyError(f"No prompt template found for task '{task}' at {path}")
+            self._cache[task] = string.Template(path.read_text(encoding="utf-8"))
+        return self._cache[task]
 
     def get_prompt(self, task: str, **kwargs: object) -> str:
         """Return the formatted prompt for the given task."""
-        template = PROMPT_TEMPLATES.get(task)
-        if template is None:
-            raise KeyError(f"No prompt registered for task '{task}'")
-        return template.format(**kwargs)
+        return self._load(task).substitute(kwargs)
