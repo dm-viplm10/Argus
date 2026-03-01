@@ -72,13 +72,15 @@ async def test_verifier_active_verification(
     mock_agent = AsyncMock(return_value=agent_result)
     mock_react = MagicMock(return_value=MagicMock(ainvoke=mock_agent))
 
+    mock_prompt = MagicMock(get_prompt=MagicMock(return_value="mock prompt"))
     with (
         patch("src.agent.nodes.verifier.get_stream_writer", return_value=lambda x: None),
         patch("src.agent.nodes.verifier.create_react_agent", mock_react),
     ):
-        from src.agent.nodes.verifier import verifier_node
+        from src.agent.nodes.verifier import VerifierAgent
 
-        result = await verifier_node(sample_state, registry=mock_registry, settings=settings)
+        agent = VerifierAgent(registry=mock_registry, settings=settings, prompt_registry=mock_prompt)
+        result = await agent.run(sample_state)
 
     assert len(result["verified_facts"]) == 1
     assert result["verified_facts"][0]["final_confidence"] == 0.85
@@ -92,10 +94,12 @@ async def test_verifier_active_verification(
 @pytest.mark.asyncio
 async def test_verifier_skips_when_no_facts(sample_state, mock_registry, settings):
     """Test that the verifier sets current_phase_verified=True when there are no facts (prevents infinite loop)."""
+    mock_prompt = MagicMock(get_prompt=MagicMock(return_value="mock prompt"))
     with patch("src.agent.nodes.verifier.get_stream_writer", return_value=lambda x: None):
-        from src.agent.nodes.verifier import verifier_node
+        from src.agent.nodes.verifier import VerifierAgent
 
-        result = await verifier_node(sample_state, registry=mock_registry, settings=settings)
+        agent = VerifierAgent(registry=mock_registry, settings=settings, prompt_registry=mock_prompt)
+        result = await agent.run(sample_state)
 
     assert result == {"current_phase_verified": True}
 
@@ -118,13 +122,15 @@ async def test_verifier_delta_cursor(sample_state, mock_registry, settings, mock
     mock_agent = AsyncMock(return_value=agent_result)
     mock_react = MagicMock(return_value=MagicMock(ainvoke=mock_agent))
 
+    mock_prompt = MagicMock(get_prompt=MagicMock(return_value="mock prompt"))
     with (
         patch("src.agent.nodes.verifier.get_stream_writer", return_value=lambda x: None),
         patch("src.agent.nodes.verifier.create_react_agent", mock_react),
     ):
-        from src.agent.nodes.verifier import verifier_node
+        from src.agent.nodes.verifier import VerifierAgent
 
-        result = await verifier_node(sample_state, registry=mock_registry, settings=settings)
+        agent = VerifierAgent(registry=mock_registry, settings=settings, prompt_registry=mock_prompt)
+        result = await agent.run(sample_state)
 
     # The user prompt should only contain the 1 new fact (index 2)
     call_args = mock_agent.call_args
@@ -172,13 +178,15 @@ async def test_verifier_extracts_from_tool_call_not_free_text(
     mock_agent = AsyncMock(return_value={"messages": [tool_call_msg, final_msg]})
     mock_react = MagicMock(return_value=MagicMock(ainvoke=mock_agent))
 
+    mock_prompt = MagicMock(get_prompt=MagicMock(return_value="mock prompt"))
     with (
         patch("src.agent.nodes.verifier.get_stream_writer", return_value=lambda x: None),
         patch("src.agent.nodes.verifier.create_react_agent", mock_react),
     ):
-        from src.agent.nodes.verifier import verifier_node
+        from src.agent.nodes.verifier import VerifierAgent
 
-        result = await verifier_node(sample_state, registry=mock_registry, settings=settings)
+        agent = VerifierAgent(registry=mock_registry, settings=settings, prompt_registry=mock_prompt)
+        result = await agent.run(sample_state)
 
     # Should use tool call data (0.92), not the misleading text
     assert result["verified_facts"][0]["final_confidence"] == 0.92

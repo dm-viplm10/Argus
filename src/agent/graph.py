@@ -2,22 +2,24 @@
 
 from __future__ import annotations
 
-import functools
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 
 from src.agent.edges import route_from_supervisor
-from src.agent.nodes.graph_builder import graph_builder_node
-from src.agent.nodes.phase_strategist import phase_strategist_node
-from src.agent.nodes.planner import planner_node
-from src.agent.nodes.query_refiner import query_refiner_node
-from src.agent.nodes.risk_assessor import risk_assessor_node
-from src.agent.nodes.search_and_analyze import search_and_analyze_node
-from src.agent.nodes.synthesizer import synthesizer_node
-from src.agent.nodes.verifier import verifier_node
+from src.agent.nodes import (
+    GraphBuilderNode,
+    PhaseStrategistAgent,
+    PlannerAgent,
+    QueryRefinerAgent,
+    RiskAssessorAgent,
+    SearchAndAnalyzeAgent,
+    SupervisorAgent,
+    SynthesizerAgent,
+    VerifierAgent,
+)
+from src.agent.prompts.registry import PromptRegistry
 from src.agent.state import ResearchState
-from src.agent.supervisor import supervisor_node
 from src.config import Settings
 from src.graph_db.connection import Neo4jConnection
 from src.models.llm_registry import LLMRegistry
@@ -31,40 +33,39 @@ def build_research_graph(
 ) -> StateGraph:
     """Build the complete research supervisor StateGraph.
 
-    Each node is a partial-applied async function that receives
-    shared dependencies (router, registry, neo4j_conn) via closure.
+    Uses agent instances with dependency injection. Each agent's run method
+    satisfies LangGraph's node interface: async def(state) -> dict.
     """
     router = ModelRouter(registry)
+    prompt_registry = PromptRegistry()
 
-    # Bind dependencies to node functions
-    _supervisor = functools.partial(supervisor_node, router=router)
-    _planner = functools.partial(planner_node, router=router)
-    _phase_strategist = functools.partial(phase_strategist_node, router=router)
-    _query_refiner = functools.partial(query_refiner_node, router=router)
-    _search_and_analyze = functools.partial(
-        search_and_analyze_node, registry=registry, settings=settings
-    )
-    _verifier = functools.partial(verifier_node, registry=registry, settings=settings)
-    _risk_assessor = functools.partial(risk_assessor_node, router=router)
-    _graph_builder = functools.partial(graph_builder_node, neo4j_conn=neo4j_conn)
-    _synthesizer = functools.partial(synthesizer_node, router=router)
+    agents = {
+        "supervisor": SupervisorAgent(router=router, prompt_registry=prompt_registry),
+        "planner": PlannerAgent(router=router, prompt_registry=prompt_registry),
+        "phase_strategist": PhaseStrategistAgent(router=router, prompt_registry=prompt_registry),
+        "query_refiner": QueryRefinerAgent(router=router, prompt_registry=prompt_registry),
+        "search_and_analyze": SearchAndAnalyzeAgent(
+            registry=registry,
+            settings=settings,
+            prompt_registry=prompt_registry,
+        ),
+        "verifier": VerifierAgent(
+            registry=registry,
+            settings=settings,
+            prompt_registry=prompt_registry,
+        ),
+        "risk_assessor": RiskAssessorAgent(router=router, prompt_registry=prompt_registry),
+        "graph_builder": GraphBuilderNode(neo4j_conn=neo4j_conn),
+        "synthesizer": SynthesizerAgent(router=router, prompt_registry=prompt_registry),
+    }
 
     graph = StateGraph(ResearchState)
 
-    graph.add_node("supervisor", _supervisor)
-    graph.add_node("planner", _planner)
-    graph.add_node("phase_strategist", _phase_strategist)
-    graph.add_node("query_refiner", _query_refiner)
-    graph.add_node("search_and_analyze", _search_and_analyze)
-    graph.add_node("verifier", _verifier)
-    graph.add_node("risk_assessor", _risk_assessor)
-    graph.add_node("graph_builder", _graph_builder)
-    graph.add_node("synthesizer", _synthesizer)
+    for name, agent in agents.items():
+        graph.add_node(name, agent.run)
 
-    # Entry: always start with supervisor
     graph.add_edge(START, "supervisor")
 
-    # Supervisor routes to any sub-agent or END
     graph.add_conditional_edges(
         "supervisor",
         route_from_supervisor,
@@ -81,7 +82,6 @@ def build_research_graph(
         },
     )
 
-    # Every sub-agent returns to supervisor after completion
     for node_name in [
         "planner",
         "phase_strategist",

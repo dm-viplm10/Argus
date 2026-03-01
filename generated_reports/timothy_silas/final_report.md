@@ -1,7 +1,7 @@
 # OSINT Investigation Report: Timothy Silas Prugh Overturf
 ### CEO, Sisu Capital, LLC
 **Classification:** SENSITIVE — FOR AUTHORIZED USE ONLY
-**Report Date:** 2025
+**Report Date:** 2026
 **Report Status:** Active Investigation (SEC litigation pending)
 
 ---

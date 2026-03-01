@@ -29,16 +29,17 @@ def mock_risk_output():
 
 
 @pytest.mark.asyncio
-async def test_risk_assessor_flags_risks(sample_state, mock_router, mock_risk_output):
+async def test_risk_assessor_flags_risks(sample_state, mock_router, mock_prompt_registry, mock_risk_output):
     sample_state["verified_facts"] = [
         {"fact": "CEO of Sisu Capital", "final_confidence": 0.85}
     ]
     mock_router.invoke = AsyncMock(return_value=mock_risk_output)
 
     with patch("src.agent.nodes.risk_assessor.get_stream_writer", return_value=lambda x: None):
-        from src.agent.nodes.risk_assessor import risk_assessor_node
+        from src.agent.nodes.risk_assessor import RiskAssessorAgent
 
-        result = await risk_assessor_node(sample_state, router=mock_router)
+        agent = RiskAssessorAgent(router=mock_router, prompt_registry=mock_prompt_registry)
+        result = await agent.run(sample_state)
 
     assert len(result["risk_flags"]) == 1
     assert result["risk_flags"][0]["severity"] == "medium"
@@ -46,11 +47,12 @@ async def test_risk_assessor_flags_risks(sample_state, mock_router, mock_risk_ou
 
 
 @pytest.mark.asyncio
-async def test_risk_assessor_skips_when_no_facts(sample_state, mock_router):
+async def test_risk_assessor_skips_when_no_facts(sample_state, mock_router, mock_prompt_registry):
     """When no facts to assess, still sets current_phase_risk_assessed to break supervisor loop."""
     with patch("src.agent.nodes.risk_assessor.get_stream_writer", return_value=lambda x: None):
-        from src.agent.nodes.risk_assessor import risk_assessor_node
+        from src.agent.nodes.risk_assessor import RiskAssessorAgent
 
-        result = await risk_assessor_node(sample_state, router=mock_router)
+        agent = RiskAssessorAgent(router=mock_router, prompt_registry=mock_prompt_registry)
+        result = await agent.run(sample_state)
 
     assert result == {"current_phase_risk_assessed": True}

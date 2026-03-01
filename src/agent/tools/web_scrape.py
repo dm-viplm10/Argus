@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import random
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
+import trafilatura
 from bs4 import BeautifulSoup
 from langchain_core.tools import BaseTool
 from pydantic import Field
@@ -50,8 +52,6 @@ class WebScrapeTool(BaseTool):
         return asyncio.get_event_loop().run_until_complete(self._scrape(url))
 
     async def _scrape(self, url: str) -> str:
-        from urllib.parse import urlparse
-
         domain = urlparse(url).netloc
         now = asyncio.get_event_loop().time()
         last = _domain_last_request.get(domain, 0.0)
@@ -96,8 +96,6 @@ class WebScrapeTool(BaseTool):
 
     def _extract_text(self, html: str, url: str) -> str:
         try:
-            import trafilatura
-
             text = trafilatura.extract(html, url=url, include_tables=True, include_links=True)
             if text and len(text) > 100:
                 return text

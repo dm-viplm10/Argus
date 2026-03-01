@@ -67,6 +67,14 @@ def mock_router(mock_registry):
 
 
 @pytest.fixture
+def mock_prompt_registry():
+    """Mock PromptRegistry that returns a placeholder for any task."""
+    mock = MagicMock()
+    mock.get_prompt = MagicMock(side_effect=lambda task, **kwargs: f"Mock prompt for {task}")
+    return mock
+
+
+@pytest.fixture
 def sample_state() -> dict:
     """A sample research state for testing."""
     return {
