@@ -36,7 +36,7 @@ def mock_analyzer_output():
             ExtractedEntity(
                 name="Sisu Capital",
                 type="organization",
-                attributes={"type": "investment firm"},
+                attributes={"industry": "investment firm"},
                 sources=["https://example.com/article"],
             ),
         ],

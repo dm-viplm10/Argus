@@ -33,12 +33,92 @@ _JOB_TTL = 86400 * 7  # 7 days
 # In-memory fallback for when Redis is unavailable (tests / local dev without Redis)
 _jobs: dict[str, dict[str, Any]] = {}
 
-# Tracks live asyncio tasks for inline (non-Celery) runs so they can be cancelled
+# Tracks live asyncio tasks so they can be cancelled
 _inline_tasks: dict[str, asyncio.Task] = {}
+
+# Per-job event queues: astream pushes writer() events here, SSE endpoint consumes.
+_event_queues: dict[str, asyncio.Queue] = {}
 
 # Shared cancellation set — checked by the supervisor node between every step.
 # This enables cooperative cancellation that actually stops the LLM pipeline.
 _cancelled_jobs: set[str] = set()
+
+# Node names registered in the StateGraph — used to filter astream_events
+# down to graph-level node transitions (ignoring internal sub-chains).
+_GRAPH_NODES = frozenset({
+    "supervisor", "planner", "query_refiner", "search_and_scrape",
+    "analyzer", "verifier", "risk_assessor", "graph_builder", "synthesizer",
+})
+
+
+def _to_sse_event(raw: dict) -> tuple[str, dict] | None:
+    """Map a LangGraph stream event to a frontend-friendly (event_type, data) pair.
+
+    Returns None for events that should not be forwarded to the client.
+    """
+    kind = raw["event"]
+    node = raw.get("metadata", {}).get("langgraph_node", "")
+
+    if kind == "on_chain_start" and raw.get("name") in _GRAPH_NODES:
+        return ("node_start", {"node": raw["name"]})
+
+    if kind == "on_chain_end" and raw.get("name") in _GRAPH_NODES:
+        output = raw.get("data", {}).get("output") or {}
+        summary: dict[str, Any] = {"node": raw["name"]}
+        if isinstance(output, dict):
+            for key in ("extracted_facts", "entities", "verified_facts",
+                        "risk_flags", "pending_queries"):
+                val = output.get(key)
+                if isinstance(val, list) and val:
+                    summary[key] = len(val)
+            if output.get("research_plan"):
+                summary["phases"] = len(output["research_plan"])
+            if output.get("final_report"):
+                summary["has_report"] = True
+            if output.get("overall_risk_score") is not None:
+                summary["risk_score"] = output["overall_risk_score"]
+        return ("node_end", summary)
+
+    if kind == "on_chat_model_stream":
+        chunk = raw.get("data", {}).get("chunk")
+        if chunk is None:
+            return None
+        content = getattr(chunk, "content", "")
+        # Claude returns content as a list of typed blocks (thinking / text / tool_use)
+        if isinstance(content, list):
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "thinking":
+                    t = block.get("thinking", "")
+                    if t:
+                        return ("thinking", {"node": node, "content": t})
+                elif block.get("type") == "text":
+                    t = block.get("text", "")
+                    if t:
+                        return ("token", {"node": node, "content": t})
+            return None
+        if isinstance(content, str) and content:
+            return ("token", {"node": node, "content": content})
+        return None
+
+    if kind == "on_tool_start":
+        tool_input = raw.get("data", {}).get("input")
+        return ("tool_start", {
+            "node": node,
+            "tool": raw.get("name", ""),
+            "input": str(tool_input)[:500] if tool_input else "",
+        })
+
+    if kind == "on_tool_end":
+        output = raw.get("data", {}).get("output", "")
+        return ("tool_end", {
+            "node": node,
+            "tool": raw.get("name", ""),
+            "output": str(output)[:500],
+        })
+
+    return None
 
 
 def is_job_cancelled(research_id: str) -> bool:
@@ -97,17 +177,11 @@ async def start_research(
     _jobs[research_id] = job_data
     await _redis_set_job(research_id, {"status": "queued", "created_at": now.isoformat()})
 
-        # Fire background task (Celery integration in Phase 8; inline fallback here)
-    try:
-        from src.worker import run_research_task
-
-        run_research_task.delay(research_id, request.model_dump())
-        logger.info("research_queued_celery", research_id=research_id)
-    except Exception:
-        # Celery unavailable — run inline as asyncio task
-        task = asyncio.create_task(_run_research_inline(research_id, request, registry, neo4j))
-        _inline_tasks[research_id] = task
-        logger.info("research_queued_inline", research_id=research_id)
+    # Run inline as asyncio task — required for SSE streaming.
+    _event_queues[research_id] = asyncio.Queue()
+    task = asyncio.create_task(_run_research_inline(research_id, request, registry, neo4j))
+    _inline_tasks[research_id] = task
+    logger.info("research_queued_inline", research_id=research_id)
 
     return ResearchResponse(
         research_id=research_id,
@@ -122,12 +196,13 @@ async def _run_research_inline(
     registry: LLMRegistry,
     neo4j: Neo4jConnection,
 ) -> None:
-    """Run research inline when Celery is unavailable."""
+    """Run research graph in the background with SSE streaming."""
     from src.agent.graph import compile_research_graph
     from src.api.dependencies import get_checkpointer
 
     settings = get_settings()
     checkpointer = get_checkpointer()
+    queue = _event_queues.get(research_id)
 
     _jobs[research_id]["status"] = "running"
 
@@ -144,12 +219,10 @@ async def _run_research_inline(
             "iteration_count": 0,
             "phase_complete": False,
             "supervisor_instructions": "",
-            # Per-phase progress flags — reset on every phase advance
             "current_phase_searched": False,
             "current_phase_analyzed": False,
             "current_phase_verified": False,
             "current_phase_risk_assessed": False,
-            # Delta cursors — only advance, never reset
             "search_results_analyzed_count": 0,
             "scraped_content_analyzed_count": 0,
             "facts_verified_count": 0,
@@ -176,8 +249,18 @@ async def _run_research_inline(
         }
 
         config = {"configurable": {"thread_id": research_id}, "recursion_limit": 150}
-        result = await graph.ainvoke(initial_state, config)
-        _jobs[research_id]["state"] = result
+
+        async for raw in graph.astream_events(
+            initial_state,
+            config,
+            version="v2",
+            include_types=["chain", "chat_model", "tool"],
+        ):
+            if queue is not None:
+                sse = _to_sse_event(raw)
+                if sse is not None:
+                    await queue.put(sse)
+
         _jobs[research_id]["status"] = "completed"
         logger.info("research_completed", research_id=research_id)
 
@@ -192,6 +275,8 @@ async def _run_research_inline(
         logger.error("research_failed", research_id=research_id, error=str(exc))
 
     finally:
+        if queue is not None:
+            await queue.put(None)  # sentinel: tells SSE consumer the stream is done
         _inline_tasks.pop(research_id, None)
         clear_cancellation(research_id)
 
@@ -227,8 +312,7 @@ async def get_research(research_id: str) -> ResearchResult:
 async def get_research_status(research_id: str) -> ResearchStatus:
     """Get real-time research status.
 
-    Reads lifecycle status from Redis (written by the Celery worker),
-    and live graph progress from the LangGraph checkpoint in Redis.
+    Reads lifecycle status and live graph progress from the LangGraph checkpoint in Redis.
     """
     redis_job = await _redis_get_job(research_id)
     mem_job = _jobs.get(research_id)
@@ -245,6 +329,9 @@ async def get_research_status(research_id: str) -> ResearchStatus:
         svc = CheckpointService(checkpointer)
         graph_state = await svc.get_latest_state(research_id) or {}
 
+    audit_log = graph_state.get("audit_log", [])
+    current_node = audit_log[-1].get("node") if audit_log else None
+
     return ResearchStatus(
         research_id=research_id,
         status=status,
@@ -258,6 +345,8 @@ async def get_research_status(research_id: str) -> ResearchStatus:
         searches_executed=len(graph_state.get("search_queries_executed", [])),
         iteration_count=graph_state.get("iteration_count", 0),
         errors=graph_state.get("errors", []),
+        current_node=current_node,
+        audit_log=audit_log,
     )
 
 
@@ -265,8 +354,6 @@ async def get_research_status(research_id: str) -> ResearchStatus:
 async def cancel_research(research_id: str) -> dict:
     """Cancel a queued or running research job.
 
-    For Celery-backed jobs, revokes the task on the worker.
-    For inline asyncio jobs, cancels the background task directly.
     Returns a 409 if the job is already in a terminal state.
     """
     redis_job = await _redis_get_job(research_id)
@@ -286,18 +373,6 @@ async def cancel_research(research_id: str) -> dict:
     _cancelled_jobs.add(research_id)
     logger.info("cancellation_signalled", research_id=research_id)
 
-    # --- Celery path ---
-    task_id = (redis_job or {}).get("task_id") or (mem_job or {}).get("task_id")
-    if task_id:
-        try:
-            from src.worker import celery_app
-
-            celery_app.control.revoke(task_id, terminate=True, signal="SIGTERM")
-            logger.info("celery_task_revoked", research_id=research_id, task_id=task_id)
-        except Exception as exc:
-            logger.warning("celery_revoke_failed", research_id=research_id, error=str(exc))
-
-    # --- Inline asyncio path ---
     inline_task = _inline_tasks.get(research_id)
     if inline_task and not inline_task.done():
         inline_task.cancel()
@@ -314,47 +389,41 @@ async def cancel_research(research_id: str) -> dict:
 
 @router.get("/{research_id}/stream")
 async def stream_research(research_id: str) -> EventSourceResponse:
-    """SSE endpoint for real-time research progress.
+    """SSE endpoint — pipes graph node events to the client in real time.
 
-    Streams events as the LangGraph supervisor processes each node.
-    Falls back to polling the job state when streaming isn't available.
+    Each `event: node` carries the exact dict emitted by get_stream_writer()
+    inside each LangGraph node (supervisor, planner, analyzer, etc.).
+    A final `event: done` signals the stream is over.
     """
 
     async def event_generator():
-        checkpointer = get_checkpointer()
-        checkpoint_svc = CheckpointService(checkpointer) if checkpointer else None
+        queue = _event_queues.get(research_id)
 
-        while True:
-            redis_job = await _redis_get_job(research_id)
-            mem_job = _jobs.get(research_id)
-            job = redis_job or (mem_job and {"status": mem_job.get("status", "unknown")})
-
-            if not job:
+        if queue is None:
+            # No live stream: run finished / not inline / not found
+            job = _jobs.get(research_id)
+            if job:
+                yield {"event": "done", "data": json.dumps({"status": job.get("status", "unknown")})}
+            else:
                 yield {"event": "error", "data": json.dumps({"error": "not_found"})}
-                return
+            return
 
-            status = job.get("status", "unknown")
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=300)
+                except asyncio.TimeoutError:
+                    yield {"event": "ping", "data": ""}
+                    continue
 
-            # Pull live graph progress from LangGraph checkpoint while running
-            graph_state: dict = {}
-            if checkpoint_svc and status == "running":
-                graph_state = await checkpoint_svc.get_latest_state(research_id) or {}
+                if event is None:
+                    status = _jobs.get(research_id, {}).get("status", "completed")
+                    yield {"event": "done", "data": json.dumps({"status": status})}
+                    return
 
-            yield {
-                "event": "status",
-                "data": json.dumps({
-                    "status": status,
-                    "current_phase": graph_state.get("current_phase", 0),
-                    "facts": len(graph_state.get("extracted_facts", [])),
-                    "entities": len(graph_state.get("entities", [])),
-                    "iteration": graph_state.get("iteration_count", 0),
-                }),
-            }
-
-            if status in ("completed", "failed"):
-                yield {"event": "done", "data": json.dumps({"status": status})}
-                return
-
-            await asyncio.sleep(2)
+                event_type, data = event
+                yield {"event": event_type, "data": json.dumps(data)}
+        finally:
+            _event_queues.pop(research_id, None)
 
     return EventSourceResponse(event_generator())

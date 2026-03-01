@@ -46,7 +46,7 @@ def setup_logging(log_level: str = "INFO", log_format: str = "json") -> None:
     root.addHandler(handler)
     root.setLevel(getattr(logging, log_level.upper(), logging.INFO))
 
-    for name in ("uvicorn", "uvicorn.access", "celery"):
+    for name in ("uvicorn", "uvicorn.access"):
         logging.getLogger(name).handlers.clear()
         logging.getLogger(name).propagate = True
 

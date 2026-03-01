@@ -1,0 +1,335 @@
+{
+	"info": {
+		"name": "Argus API",
+		"description": "Autonomous AI OSINT investigation agent — full API collection.\n\nWorkflow:\n1. POST /research to start a job\n2. GET /research/{id}/stream (SSE) to watch real-time events\n3. GET /research/{id}/status for one-shot progress\n4. GET /research/{id} for final results\n5. GET /graph/{id} for the identity graph\n6. DELETE /research/{id}/cancel to abort",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000/api/v1",
+			"type": "string"
+		},
+		{
+			"key": "research_id",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						},
+						"description": "Basic liveness probe. Returns 200 if the server is up."
+					}
+				},
+				{
+					"name": "Readiness Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/ready",
+							"host": ["{{base_url}}"],
+							"path": ["ready"]
+						},
+						"description": "Checks Neo4j connectivity. Returns `ready`, `degraded`, or `not_ready`."
+					}
+				}
+			]
+		},
+		{
+			"name": "Research",
+			"item": [
+				{
+					"name": "Start Research",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var json = pm.response.json();",
+									"if (json.research_id) {",
+									"    pm.collectionVariables.set('research_id', json.research_id);",
+									"    console.log('Set research_id: ' + json.research_id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"target_name\": \"Timothy Overturf\",\n  \"target_context\": \"CEO of Sisu Capital\",\n  \"objectives\": [\n    \"biographical\",\n    \"professional\",\n    \"financial\",\n    \"legal\",\n    \"social\",\n    \"behavioral\",\n    \"connections\",\n    \"risk_assessment\"\n  ],\n  \"max_depth\": 5\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/research",
+							"host": ["{{base_url}}"],
+							"path": ["research"]
+						},
+						"description": "Start a new research investigation.\n\n**Parameters:**\n- `target_name` (required, string) — Name of the person to investigate\n- `target_context` (optional, string) — Role/affiliation for disambiguation\n- `objectives` (optional, string[]) — Research areas to cover. Defaults to `[\"biographical\", \"financial\", \"risk_assessment\", \"connections\"]`\n  - Valid values: `biographical`, `professional`, `financial`, `legal`, `social`, `behavioral`, `connections`, `risk_assessment`\n- `max_depth` (optional, int 1–10, default 5) — Number of research phases. Higher = more thorough but slower\n\nThe response `research_id` is auto-saved as a collection variable for subsequent requests."
+					}
+				},
+				{
+					"name": "Start Research (Minimal)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var json = pm.response.json();",
+									"if (json.research_id) {",
+									"    pm.collectionVariables.set('research_id', json.research_id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"target_name\": \"Elon Musk\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/research",
+							"host": ["{{base_url}}"],
+							"path": ["research"]
+						},
+						"description": "Start research with only the required field. Uses default objectives and max_depth=5."
+					}
+				},
+				{
+					"name": "Start Research (Quick)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var json = pm.response.json();",
+									"if (json.research_id) {",
+									"    pm.collectionVariables.set('research_id', json.research_id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"target_name\": \"Timothy Overturf\",\n  \"target_context\": \"CEO of Sisu Capital\",\n  \"objectives\": [\"biographical\", \"legal\", \"risk_assessment\"],\n  \"max_depth\": 2\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/research",
+							"host": ["{{base_url}}"],
+							"path": ["research"]
+						},
+						"description": "Faster run — fewer objectives and only 2 phases. Good for testing the pipeline end-to-end without waiting hours."
+					}
+				},
+				{
+					"name": "Stream Research (SSE)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "text/event-stream"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/research/{{research_id}}/stream",
+							"host": ["{{base_url}}"],
+							"path": ["research", "{{research_id}}", "stream"]
+						},
+						"description": "**Server-Sent Events** — real-time streaming of all graph activity.\n\nIn Postman: use the SSE client (or send and keep the connection open).\n\n**Event types received:**\n\n| Event | Description | Example data |\n|---|---|---|\n| `node_start` | Graph node begins | `{\"node\": \"analyzer\"}` |\n| `node_end` | Graph node completes | `{\"node\": \"analyzer\", \"extracted_facts\": 41}` |\n| `token` | LLM text chunk | `{\"node\": \"synthesizer\", \"content\": \"# Report\\n\"}` |\n| `thinking` | Claude thinking block | `{\"node\": \"planner\", \"content\": \"I need to...\"}` |\n| `tool_start` | Tool invocation begins | `{\"node\": \"search_and_scrape\", \"tool\": \"tavily_search\"}` |\n| `tool_end` | Tool returns result | `{\"node\": \"search_and_scrape\", \"tool\": \"tavily_search\", \"output\": \"...\"}` |\n| `ping` | Keepalive (every 5 min) | empty |\n| `done` | Stream finished | `{\"status\": \"completed\"}` |\n| `error` | Job not found | `{\"error\": \"not_found\"}` |"
+					}
+				},
+				{
+					"name": "Get Research Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/research/{{research_id}}/status",
+							"host": ["{{base_url}}"],
+							"path": ["research", "{{research_id}}", "status"]
+						},
+						"description": "One-shot status snapshot from the LangGraph checkpoint.\n\n**Response fields:**\n- `status` — `queued` | `running` | `completed` | `failed` | `cancelled`\n- `current_phase` / `max_phases` — progress through research plan\n- `facts_extracted`, `entities_discovered`, `verified_facts`, `risk_flags` — cumulative counts\n- `searches_executed`, `graph_nodes`, `iteration_count`\n- `current_node` — last node that completed\n- `audit_log` — full node execution history with timestamps, models, durations\n- `errors` — any errors encountered"
+					}
+				},
+				{
+					"name": "Get Research Results",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/research/{{research_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["research", "{{research_id}}"]
+						},
+						"description": "Get full results for a completed research job.\n\n**Response fields:**\n- `status` — job status\n- `target_name`, `target_context` — the research subject\n- `final_report` — full Markdown report (null until synthesizer runs)\n- `facts_count`, `entities_count`, `risk_flags_count`\n- `overall_risk_score` — 0.0 to 1.0\n- `audit_log` — full execution history"
+					}
+				},
+				{
+					"name": "Cancel Research",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/research/{{research_id}}/cancel",
+							"host": ["{{base_url}}"],
+							"path": ["research", "{{research_id}}", "cancel"]
+						},
+						"description": "Cancel a running or queued research job.\n\n- Returns `200` with `{\"status\": \"cancelled\"}`\n- Returns `404` if job not found\n- Returns `409` if job already in terminal state (`completed`, `failed`, `cancelled`)\n\nCancellation is cooperative — the supervisor checks before each routing decision."
+					}
+				}
+			]
+		},
+		{
+			"name": "Graph",
+			"item": [
+				{
+					"name": "Get Identity Graph",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/graph/{{research_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["graph", "{{research_id}}"]
+						},
+						"description": "Get the Neo4j identity graph for a research job as D3-compatible JSON.\n\n**Response:**\n- `nodes[]` — `{id, labels, properties}` (entities discovered)\n- `edges[]` — `{source, target, type, properties}` (relationships)\n- `node_count`, `edge_count`"
+					}
+				},
+				{
+					"name": "Export Graph (JSON)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/graph/{{research_id}}/export?format=json",
+							"host": ["{{base_url}}"],
+							"path": ["graph", "{{research_id}}", "export"],
+							"query": [
+								{
+									"key": "format",
+									"value": "json",
+									"description": "Export format: json or graphml"
+								}
+							]
+						},
+						"description": "Download the identity graph as a JSON file.\n\n**Query parameters:**\n- `format` — `json` (default) or `graphml`"
+					}
+				},
+				{
+					"name": "Export Graph (GraphML)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/graph/{{research_id}}/export?format=graphml",
+							"host": ["{{base_url}}"],
+							"path": ["graph", "{{research_id}}", "export"],
+							"query": [
+								{
+									"key": "format",
+									"value": "graphml",
+									"description": "GraphML format for Gephi, yEd, etc."
+								}
+							]
+						},
+						"description": "Download the identity graph as GraphML (XML) for use in Gephi, yEd, Cytoscape, etc."
+					}
+				}
+			]
+		},
+		{
+			"name": "Evaluation",
+			"item": [
+				{
+					"name": "Run Evaluation",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"var json = pm.response.json();",
+									"if (json.evaluation_id) {",
+									"    pm.collectionVariables.set('evaluation_id', json.evaluation_id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"research_id\": \"{{research_id}}\",\n  \"ground_truth_file\": \"timothy_overturf.json\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/evaluate",
+							"host": ["{{base_url}}"],
+							"path": ["evaluate"]
+						},
+						"description": "Evaluate a completed research job against ground truth.\n\n**Parameters:**\n- `research_id` (required) — ID of a completed research job\n- `ground_truth_file` (optional, default `timothy_overturf.json`) — filename in the `ground_truth/` directory\n\n**Metrics returned:**\n- `fact_recall`, `fact_precision` — accuracy of extracted facts\n- `entity_coverage` — proportion of known entities found\n- `relationship_accuracy` — correctness of discovered relationships\n- `risk_detection_rate` — proportion of known risks flagged\n- `depth_score` — thoroughness of investigation\n- `efficiency` — quality vs token usage\n- `source_quality` — reliability of sources used"
+					}
+				},
+				{
+					"name": "Get Evaluation Results",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/evaluate/{{evaluation_id}}/results",
+							"host": ["{{base_url}}"],
+							"path": ["evaluate", "{{evaluation_id}}", "results"]
+						},
+						"description": "Retrieve evaluation results by evaluation ID."
+					}
+				}
+			]
+		}
+	]
+}

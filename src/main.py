@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
     registry = LLMRegistry(settings)
     set_registry(registry)
 
-    # Shared Redis client (for job status tracking across app + worker)
+    # Shared Redis client (for job status and checkpointer)
     redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
     set_redis_client(redis_client)
     logger.info("redis_client_initialized")
@@ -53,6 +53,7 @@ async def lifespan(app: FastAPI):
     if AsyncRedisSaver is not None:
         try:
             checkpointer = AsyncRedisSaver(redis_url=settings.REDIS_URL)
+            await checkpointer.setup()  # creates Redis key structures required before first use
             set_checkpointer(checkpointer)
             logger.info("redis_checkpointer_initialized")
         except Exception as exc:

@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 class TokenBucketRateLimiter:
     """In-process token bucket rate limiter.
 
-    For distributed limiting across Celery workers, a Redis-backed
+    For distributed limiting across processes, a Redis-backed
     implementation can replace this. This version is suitable for
     single-process or development use.
     """
