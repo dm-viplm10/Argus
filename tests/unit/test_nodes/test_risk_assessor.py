@@ -47,9 +47,10 @@ async def test_risk_assessor_flags_risks(sample_state, mock_router, mock_risk_ou
 
 @pytest.mark.asyncio
 async def test_risk_assessor_skips_when_no_facts(sample_state, mock_router):
+    """When no facts to assess, still sets current_phase_risk_assessed to break supervisor loop."""
     with patch("src.agent.nodes.risk_assessor.get_stream_writer", return_value=lambda x: None):
         from src.agent.nodes.risk_assessor import risk_assessor_node
 
         result = await risk_assessor_node(sample_state, router=mock_router)
 
-    assert result == {}
+    assert result == {"current_phase_risk_assessed": True}

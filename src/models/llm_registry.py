@@ -40,15 +40,15 @@ MODEL_CONFIG: dict[str, ModelSpec] = {
         temperature=0.4,
         purpose="Search query generation",
     ),
-    "analyzer": ModelSpec(
+    "search_and_analyze": ModelSpec(
         slug="google/gemini-2.5-flash",
         temperature=0.1,
-        purpose="Fact and entity extraction from large content",
+        purpose="Web research and structured fact/entity extraction in one ReAct pass",
     ),
     "verifier": ModelSpec(
         slug="google/gemini-2.5-pro",
-        temperature=0.0,
-        purpose="Cross-reference verification",
+        temperature=0.5,
+        purpose="Active fact verification via web search and reasoning",
     ),
     "risk_assessor": ModelSpec(
         slug="openai/gpt-4.1",

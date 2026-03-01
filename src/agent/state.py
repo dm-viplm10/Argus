@@ -43,25 +43,23 @@ class ResearchState(TypedDict, total=False):
     # Each flag is set to True by the corresponding node and cleared by the
     # supervisor when it increments current_phase. This gives the supervisor
     # accurate per-phase routing signals instead of relying on global counts.
+    # Note: current_phase_searched implies both searched AND analyzed —
+    # search_and_analyze sets it True once queries are processed and
+    # findings are extracted in the same ReAct pass.
     current_phase_searched: bool
-    current_phase_analyzed: bool
     current_phase_verified: bool
     current_phase_risk_assessed: bool
 
     # ── Delta processing cursors (never reset; only advance) ──
     # Prevents nodes from re-processing already-handled data on subsequent phases
-    search_results_analyzed_count: int      # How many search_results the analyzer has processed
-    scraped_content_analyzed_count: int     # How many scraped_content items the analyzer has processed
     facts_verified_count: int               # How many extracted_facts the verifier has processed
     risk_assessed_facts_count: int          # How many verified_facts the risk_assessor has processed
 
-    # ── Search & scrape ──
+    # ── Search ──
     search_queries_executed: Annotated[list[dict], _merge_lists]
-    search_results: Annotated[list[dict], _merge_lists]
-    scraped_content: Annotated[list[dict], _merge_lists]
     urls_visited: Annotated[set[str], _merge_sets]
 
-    # ── Analysis ──
+    # ── Analysis (written directly by search_and_analyze) ──
     extracted_facts: Annotated[list[dict], _merge_lists]
     entities: Annotated[list[dict], _merge_lists]
     relationships: Annotated[list[dict], _merge_lists]

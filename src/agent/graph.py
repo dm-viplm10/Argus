@@ -8,12 +8,11 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 
 from src.agent.edges import route_from_supervisor
-from src.agent.nodes.analyzer import analyzer_node
 from src.agent.nodes.graph_builder import graph_builder_node
 from src.agent.nodes.planner import planner_node
 from src.agent.nodes.query_refiner import query_refiner_node
 from src.agent.nodes.risk_assessor import risk_assessor_node
-from src.agent.nodes.search_agent import search_and_scrape_node
+from src.agent.nodes.search_and_analyze import search_and_analyze_node
 from src.agent.nodes.synthesizer import synthesizer_node
 from src.agent.nodes.verifier import verifier_node
 from src.agent.state import ResearchState
@@ -40,11 +39,10 @@ def build_research_graph(
     _supervisor = functools.partial(supervisor_node, router=router)
     _planner = functools.partial(planner_node, router=router)
     _query_refiner = functools.partial(query_refiner_node, router=router)
-    _search = functools.partial(
-        search_and_scrape_node, registry=registry, settings=settings
+    _search_and_analyze = functools.partial(
+        search_and_analyze_node, registry=registry, settings=settings
     )
-    _analyzer = functools.partial(analyzer_node, router=router)
-    _verifier = functools.partial(verifier_node, router=router)
+    _verifier = functools.partial(verifier_node, registry=registry, settings=settings)
     _risk_assessor = functools.partial(risk_assessor_node, router=router)
     _graph_builder = functools.partial(graph_builder_node, neo4j_conn=neo4j_conn)
     _synthesizer = functools.partial(synthesizer_node, router=router)
@@ -54,8 +52,7 @@ def build_research_graph(
     graph.add_node("supervisor", _supervisor)
     graph.add_node("planner", _planner)
     graph.add_node("query_refiner", _query_refiner)
-    graph.add_node("search_and_scrape", _search)
-    graph.add_node("analyzer", _analyzer)
+    graph.add_node("search_and_analyze", _search_and_analyze)
     graph.add_node("verifier", _verifier)
     graph.add_node("risk_assessor", _risk_assessor)
     graph.add_node("graph_builder", _graph_builder)
@@ -71,8 +68,7 @@ def build_research_graph(
         {
             "planner": "planner",
             "query_refiner": "query_refiner",
-            "search_and_scrape": "search_and_scrape",
-            "analyzer": "analyzer",
+            "search_and_analyze": "search_and_analyze",
             "verifier": "verifier",
             "risk_assessor": "risk_assessor",
             "graph_builder": "graph_builder",
@@ -85,8 +81,7 @@ def build_research_graph(
     for node_name in [
         "planner",
         "query_refiner",
-        "search_and_scrape",
-        "analyzer",
+        "search_and_analyze",
         "verifier",
         "risk_assessor",
         "graph_builder",

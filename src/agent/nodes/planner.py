@@ -76,7 +76,6 @@ async def planner_node(state: dict[str, Any], *, router: ModelRouter) -> dict[st
         "current_phase": 1,
         "phase_complete": False,
         "current_phase_searched": False,
-        "current_phase_analyzed": False,
         "current_phase_verified": False,
         "current_phase_risk_assessed": False,
         "audit_log": [audit.model_dump()],
