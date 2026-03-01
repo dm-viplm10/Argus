@@ -13,24 +13,13 @@ services:
         condition: service_healthy
     volumes:
       - ./src:/app/src
+      - ./tests:/app/tests
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/v1/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
-
-  worker:
-    build: .
-    command: celery -A src.worker worker --loglevel=info --concurrency=2
-    env_file: .env
-    depends_on:
-      neo4j:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./src:/app/src
 
   neo4j:
     image: neo4j:5-community

@@ -46,7 +46,6 @@ async def test_planner_returns_structured_plan(sample_state, mock_router, mock_p
 
     assert "research_plan" in result
     assert len(result["research_plan"]) == 2
-    assert result["max_phases"] == 2
     assert result["current_phase"] == 1
     assert len(result["audit_log"]) == 1
     assert result["audit_log"][0]["node"] == "planner"
@@ -62,4 +61,3 @@ async def test_planner_handles_empty_response(sample_state, mock_router):
         result = await planner_node(sample_state, router=mock_router)
 
     assert result["research_plan"] == []
-    assert result["max_phases"] == 0

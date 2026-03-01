@@ -90,7 +90,7 @@ async def analyzer_node(state: dict[str, Any], *, router: ModelRouter) -> dict[s
         node="analyzer",
         action="extract_entities",
         timestamp=datetime.now(timezone.utc).isoformat(),
-        model_used="google/gemini-2.5-pro",
+        model_used="google/gemini-2.5-flash",
         input_summary=f"Processed {len(content_blocks)} content blocks ({len(new_results)} search results, {len(new_scraped)} scraped)",
         output_summary=f"Extracted {len(facts)} facts, {len(entities)} entities, {len(relationships)} relationships",
         duration_ms=elapsed_ms,

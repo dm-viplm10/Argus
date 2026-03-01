@@ -36,6 +36,8 @@ class ResearchStatus(BaseModel):
     searches_executed: int = 0
     iteration_count: int = 0
     errors: list[dict] = Field(default_factory=list)
+    current_node: str | None = None
+    audit_log: list[dict] = Field(default_factory=list)
 
 
 class ResearchResult(BaseModel):

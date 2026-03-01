@@ -33,7 +33,7 @@ class ResearchService:
         objectives: list[str],
         max_depth: int = 5,
     ) -> dict[str, Any]:
-        """Initialize a new research job and dispatch to worker."""
+        """Initialize a new research job and run it in the background."""
         logger.info(
             "research_job_created",
             research_id=research_id,

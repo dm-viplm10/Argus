@@ -20,60 +20,54 @@ logger = get_logger(__name__)
 class ModelSpec:
     slug: str
     temperature: float
-    max_tokens: int
     purpose: str
+    max_tokens: int | None = None
 
 
 MODEL_CONFIG: dict[str, ModelSpec] = {
     "supervisor": ModelSpec(
         slug="openai/gpt-4.1",
         temperature=0.1,
-        max_tokens=2048,
         purpose="Agent orchestration and routing decisions",
     ),
     "planner": ModelSpec(
         slug="anthropic/claude-sonnet-4.6",
         temperature=0.3,
-        max_tokens=4096,
         purpose="Research plan generation",
     ),
     "query_refiner": ModelSpec(
         slug="openai/gpt-4.1-mini",
         temperature=0.4,
-        max_tokens=1024,
         purpose="Search query generation",
     ),
     "analyzer": ModelSpec(
-        slug="google/gemini-2.5-pro",
+        slug="google/gemini-2.5-flash",
         temperature=0.1,
-        max_tokens=8192,
         purpose="Fact and entity extraction from large content",
     ),
     "verifier": ModelSpec(
         slug="google/gemini-2.5-pro",
         temperature=0.0,
-        max_tokens=16384,
         purpose="Cross-reference verification",
     ),
     "risk_assessor": ModelSpec(
-        slug="anthropic/claude-sonnet-4.6",
+        slug="openai/gpt-4.1",
         temperature=0.5,
-        max_tokens=4096,
         purpose="Unfiltered risk and red flag identification",
     ),
     "synthesizer": ModelSpec(
         slug="anthropic/claude-sonnet-4.6",
         temperature=0.2,
-        max_tokens=8192,
         purpose="Final report generation",
     ),
 }
 
 FALLBACK_CHAINS: dict[str, list[str]] = {
-    "anthropic/claude-sonnet-4.6": ["google/gemini-2.5-pro", "openai/gpt-4.1-mini"],
-    "google/gemini-2.5-pro": ["anthropic/claude-sonnet-4.6", "openai/gpt-4.1-mini"],
-    "x-ai/grok-3": ["anthropic/claude-sonnet-4.6", "openai/gpt-4.1-mini"],
-    "openai/gpt-4.1-mini": ["anthropic/claude-sonnet-4.6"],
+    "anthropic/claude-sonnet-4.6": ["openai/gpt-4.1", "google/gemini-2.5-pro"],
+    "openai/gpt-4.1": ["anthropic/claude-sonnet-4.6", "google/gemini-2.5-pro"],
+    "openai/gpt-4.1-mini": ["google/gemini-2.5-flash", "anthropic/claude-sonnet-4.6"],
+    "google/gemini-2.5-pro": ["anthropic/claude-sonnet-4.6", "openai/gpt-4.1"],
+    "google/gemini-2.5-flash": ["openai/gpt-4.1-mini", "anthropic/claude-sonnet-4.6"],
 }
 
 
@@ -91,28 +85,27 @@ class LLMRegistry:
             self._call_stats[task_name] = {"calls": 0, "tokens": 0, "cost": 0.0}
 
     def _build_model(self, spec: ModelSpec) -> ChatOpenAI:
-        if spec.slug in self._slug_cache:
-            cached = self._slug_cache[spec.slug]
-            if (
-                cached.temperature == spec.temperature
-                and cached.max_tokens == spec.max_tokens
-            ):
-                return cached
+        cache_key = f"{spec.slug}:{spec.temperature}:{spec.max_tokens}"
+        if cache_key in self._slug_cache:
+            return self._slug_cache[cache_key]
 
-        model = ChatOpenAI(
-            model=spec.slug,
-            openai_api_key=self._settings.OPENROUTER_API_KEY,
-            openai_api_base=self._settings.OPENROUTER_BASE_URL,
-            temperature=spec.temperature,
-            max_tokens=spec.max_tokens,
-            model_kwargs={
+        kwargs: dict = {
+            "model": spec.slug,
+            "openai_api_key": self._settings.OPENROUTER_API_KEY,
+            "openai_api_base": self._settings.OPENROUTER_BASE_URL,
+            "temperature": spec.temperature,
+            "model_kwargs": {
                 "extra_headers": {
                     "HTTP-Referer": "https://argus-agent.local",
                     "X-Title": "Argus",
                 }
             },
-        )
-        self._slug_cache[spec.slug] = model
+        }
+        if spec.max_tokens is not None:
+            kwargs["max_tokens"] = spec.max_tokens
+
+        model = ChatOpenAI(**kwargs)
+        self._slug_cache[cache_key] = model
         return model
 
     def get_model(self, task: str) -> ChatOpenAI:
