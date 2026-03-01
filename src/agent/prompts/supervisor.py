@@ -14,21 +14,21 @@ Evaluate the current state and pick the SINGLE best next action, in strict prior
 
 1. If no research_plan exists → "planner"
 2. If research_plan exists AND pending_queries = 0 AND Phase Searched is False → "query_refiner"
-3. If pending_queries > 0 → "search_and_scrape"
-4. If Phase Searched is True AND Phase Analyzed is False → "analyzer"
-5. If Phase Analyzed is True AND facts_count >= 5 AND Phase Verified is False → "verifier"
-6. If Phase Verified is True AND Phase Risk Assessed is False → "risk_assessor"
-7. If Phase Risk Assessed is True AND Phase Complete is False → "graph_builder"
-8. If Phase Complete is True AND current_phase < max_phases → "query_refiner" (advances to next phase)
-9. If Phase Complete is True AND current_phase >= max_phases → "synthesizer"
-10. If final_report exists → "FINISH"
+3. If pending_queries > 0 → "search_and_analyze"
+4. If Phase Searched is True AND facts_count >= 5 AND Phase Verified is False → "verifier"
+5. If Phase Verified is True AND Phase Risk Assessed is False → "risk_assessor"
+6. If Phase Risk Assessed is True AND Phase Complete is False → "graph_builder"
+7. If Phase Complete is True AND current_phase < max_phases → "query_refiner" (advances to next phase)
+8. If Phase Complete is True AND current_phase >= max_phases → "synthesizer"
+9. If final_report exists → "FINISH"
 
 ## Important Rules
 
 - Apply rules strictly in the order listed above — stop at the FIRST rule that matches.
-- Phase flags (Phase Searched, Phase Analyzed, Phase Verified, Phase Risk Assessed) are
-  PER-PHASE and reset to False at the start of every new phase. Do NOT use global
-  counts as a substitute for these flags.
+- Phase Searched is set by search_and_analyze, which performs both searching AND structured
+  extraction in a single ReAct pass. There is no separate analyzer step.
+- Phase flags (Phase Searched, Phase Verified, Phase Risk Assessed) are PER-PHASE and reset
+  to False at the start of every new phase. Do NOT use global counts as a substitute.
 - Phase Complete is ONLY set True after graph_builder finishes. Do NOT route to
   graph_builder if Phase Complete is already True.
 - Do NOT route to synthesizer until Phase Complete is True AND current_phase >= max_phases.
@@ -43,8 +43,7 @@ Objectives: {objectives}
 
 <progress>
 Current Phase: {current_phase} / {max_phases}
-Phase Searched: {phase_searched}
-Phase Analyzed: {phase_analyzed}
+Phase Searched (+ Analyzed): {phase_searched}
 Phase Verified: {phase_verified}
 Phase Risk Assessed: {phase_risk_assessed}
 Phase Complete: {phase_complete}
@@ -64,7 +63,7 @@ Has Final Report: {has_report}
 
 Respond ONLY with valid JSON matching this schema:
 {{
-  "next_agent": "planner|query_refiner|search_and_scrape|analyzer|verifier|risk_assessor|graph_builder|synthesizer|FINISH",
+  "next_agent": "planner|query_refiner|search_and_analyze|verifier|risk_assessor|graph_builder|synthesizer|FINISH",
   "reasoning": "Brief explanation citing which rule number matched",
   "instructions_for_agent": "Specific instructions for the chosen agent based on current findings"
 }}

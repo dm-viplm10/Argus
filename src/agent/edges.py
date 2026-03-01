@@ -18,8 +18,7 @@ def route_from_supervisor(state: dict[str, Any]) -> str:
     valid_agents = {
         "planner",
         "query_refiner",
-        "search_and_scrape",
-        "analyzer",
+        "search_and_analyze",
         "verifier",
         "risk_assessor",
         "graph_builder",

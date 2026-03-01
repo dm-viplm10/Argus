@@ -56,7 +56,6 @@ async def supervisor_node(state: dict[str, Any], *, router: ModelRouter) -> dict
         current_phase=state.get("current_phase", 0),
         max_phases=state.get("max_phases", 5),
         phase_searched=state.get("current_phase_searched", False),
-        phase_analyzed=state.get("current_phase_analyzed", False),
         phase_verified=state.get("current_phase_verified", False),
         phase_risk_assessed=state.get("current_phase_risk_assessed", False),
         phase_complete=state.get("phase_complete", False),
@@ -128,7 +127,6 @@ async def supervisor_node(state: dict[str, Any], *, router: ModelRouter) -> dict
         updates["current_phase"] = new_phase
         updates["phase_complete"] = False
         updates["current_phase_searched"] = False
-        updates["current_phase_analyzed"] = False
         updates["current_phase_verified"] = False
         updates["current_phase_risk_assessed"] = False
         logger.info("phase_advanced", new_phase=new_phase)

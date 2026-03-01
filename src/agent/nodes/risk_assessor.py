@@ -28,9 +28,20 @@ async def risk_assessor_node(state: dict[str, Any], *, router: ModelRouter) -> d
     already_assessed = state.get("risk_assessed_facts_count", 0)
     new_verified = all_verified[already_assessed:]
 
+    # Fallback: when verifier didn't populate verified_facts (e.g. ReAct agent missed tool call)
+    # but did advance facts_verified_count, use extracted_facts for risk assessment
+    if not new_verified:
+        facts_verified_count = state.get("facts_verified_count", 0)
+        if facts_verified_count > already_assessed:
+            extracted = state.get("extracted_facts", [])
+            new_verified = extracted[already_assessed:facts_verified_count]
+            if new_verified:
+                writer({"node": "risk_assessor", "status": "fallback", "reason": "using extracted_facts (verified_facts empty)"})
+
     if not new_verified:
         writer({"node": "risk_assessor", "status": "skipped", "reason": "no new verified facts"})
-        return {}
+        # Still mark phase as risk-assessed to prevent infinite supervisor→risk_assessor loop
+        return {"current_phase_risk_assessed": True}
 
     existing_flags = state.get("risk_flags", [])
     relationships = state.get("relationships", [])

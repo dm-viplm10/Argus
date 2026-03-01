@@ -46,8 +46,8 @@ _cancelled_jobs: set[str] = set()
 # Node names registered in the StateGraph — used to filter astream_events
 # down to graph-level node transitions (ignoring internal sub-chains).
 _GRAPH_NODES = frozenset({
-    "supervisor", "planner", "query_refiner", "search_and_scrape",
-    "analyzer", "verifier", "risk_assessor", "graph_builder", "synthesizer",
+    "supervisor", "planner", "query_refiner", "search_and_analyze",
+    "verifier", "risk_assessor", "graph_builder", "synthesizer",
 })
 
 
@@ -220,16 +220,11 @@ async def _run_research_inline(
             "phase_complete": False,
             "supervisor_instructions": "",
             "current_phase_searched": False,
-            "current_phase_analyzed": False,
             "current_phase_verified": False,
             "current_phase_risk_assessed": False,
-            "search_results_analyzed_count": 0,
-            "scraped_content_analyzed_count": 0,
             "facts_verified_count": 0,
             "risk_assessed_facts_count": 0,
             "search_queries_executed": [],
-            "search_results": [],
-            "scraped_content": [],
             "urls_visited": set(),
             "extracted_facts": [],
             "entities": [],

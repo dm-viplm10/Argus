@@ -50,7 +50,7 @@ def mock_registry(settings):
         mock_model.model_name = "test-model"
 
         for task in [
-            "supervisor", "planner", "query_refiner", "analyzer",
+            "supervisor", "planner", "query_refiner", "search_and_analyze",
             "verifier", "risk_assessor", "synthesizer",
         ]:
             registry._models[task] = mock_model
@@ -81,8 +81,6 @@ def sample_state() -> dict:
         "research_plan": [],
         "pending_queries": [],
         "search_queries_executed": [],
-        "search_results": [],
-        "scraped_content": [],
         "urls_visited": set(),
         "extracted_facts": [],
         "entities": [],
