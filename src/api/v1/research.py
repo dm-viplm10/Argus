@@ -38,9 +38,9 @@ _STATE_TTL = 86400 * 30  # 30 days — eval data must outlive the research run T
 # Excludes large/transient fields (urls_visited, pending_queries, internal cursors).
 _EVAL_STATE_FIELDS = frozenset({
     "research_id", "target_name", "target_context",
-    "verified_facts",           # → fact_recall, fact_precision, depth_score, source_quality
-    "entities",                 # → entity_coverage
-    "relationships",            # → relationship_accuracy
+    "verified_facts",           # → fact_precision (from state), depth_score, source_quality
+    "entities",                 # → network_fidelity (with relationships)
+    "relationships",            # → network_fidelity
     "risk_flags",               # → risk_detection_rate
     "search_queries_executed",  # → efficiency
     "extracted_facts", "contradictions", "unverified_claims",

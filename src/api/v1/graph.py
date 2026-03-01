@@ -15,6 +15,7 @@ except ImportError:
     _NEO4J_TEMPORAL = ()
 
 from src.api.dependencies import get_neo4j
+from src.api.graph_image import render_graph_image
 from src.api.v1.schemas.graph import GraphEdge, GraphNode, GraphResponse
 from src.graph_db.connection import Neo4jConnection
 from src.graph_db.queries import GRAPH_FOR_RESEARCH
@@ -83,10 +84,10 @@ async def get_graph(
 @router.get("/{research_id}/export")
 async def export_graph(
     research_id: str,
-    format: Literal["json", "graphml"] = "json",
+    format: Literal["json", "graphml", "png", "jpeg"] = "json",
     neo4j: Neo4jConnection = Depends(get_neo4j),
 ) -> Response:
-    """Export the identity graph in JSON or GraphML format."""
+    """Export the identity graph in JSON, GraphML, PNG, or JPEG format."""
     graph_data = await get_graph(research_id, neo4j)
 
     if format == "json":
@@ -97,13 +98,28 @@ async def export_graph(
             headers={"Content-Disposition": f"attachment; filename=graph_{research_id}.json"},
         )
 
-    # GraphML export
-    graphml = _to_graphml(graph_data)
-    return Response(
-        content=graphml,
-        media_type="application/xml",
-        headers={"Content-Disposition": f"attachment; filename=graph_{research_id}.graphml"},
-    )
+    if format == "graphml":
+        graphml = _to_graphml(graph_data)
+        return Response(
+            content=graphml,
+            media_type="application/xml",
+            headers={"Content-Disposition": f"attachment; filename=graph_{research_id}.graphml"},
+        )
+
+    # Image export (PNG or JPEG)
+    if format in ("png", "jpeg"):
+        image_format: Literal["png", "jpeg"] = "png" if format == "png" else "jpeg"
+        content = render_graph_image(graph_data, format=image_format)
+        ext = "png" if format == "png" else "jpg"
+        media_type = "image/png" if format == "png" else "image/jpeg"
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={"Content-Disposition": f"attachment; filename=graph_{research_id}.{ext}"},
+        )
+
+    # Unreachable for valid Literal, but satisfy type checker
+    raise HTTPException(status_code=400, detail=f"Unsupported format: {format}")
 
 
 def _to_graphml(graph: GraphResponse) -> str:

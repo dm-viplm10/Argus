@@ -65,6 +65,11 @@ MODEL_CONFIG: dict[str, ModelSpec] = {
         temperature=0.2,
         purpose="Final report generation",
     ),
+    "evaluator": ModelSpec(
+        slug="openai/gpt-4.1",
+        temperature=0.6,
+        purpose="LLM-as-judge evaluation scoring against ground truth",
+    ),
 }
 
 FALLBACK_CHAINS: dict[str, list[str]] = {

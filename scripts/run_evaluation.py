@@ -35,13 +35,16 @@ async def main() -> None:
         # Dry run with empty state to show metric framework
         empty_state: dict = {
             "verified_facts": [],
+            "extracted_facts": [],
             "entities": [],
             "relationships": [],
             "risk_flags": [],
             "search_queries_executed": [],
         }
 
-        metrics, summary = await run_evaluation(empty_state, gt_file.name)
+        metrics, summary, evaluation_report = await run_evaluation(
+            empty_state, gt_file.name, use_llm_judge=False
+        )
         print(summary)
         print()
 

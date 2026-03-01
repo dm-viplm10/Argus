@@ -21,6 +21,8 @@ dependencies = [
     "pydantic-settings>=2.7.0",
     "structlog>=25.1.0",
     "sse-starlette>=2.2.0",
+    "networkx>=3.4.0",
+    "matplotlib>=3.9.0",
 ]
 
 [project.optional-dependencies]
