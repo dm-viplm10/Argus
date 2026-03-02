@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-from neo4j import AsyncGraphDatabase, AsyncDriver
+from typing import TYPE_CHECKING, Any
 
-from src.config import Settings
+from neo4j import AsyncDriver, AsyncGraphDatabase
+
 from src.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from src.config import Settings
 
 logger = get_logger(__name__)
 
@@ -50,11 +54,17 @@ class Neo4jConnection:
         return self._driver
 
     async def execute_read(self, query: str, **params: object) -> list[dict]:
+        """Run a read query inside a read transaction with automatic retry."""
         async with self.driver.session() as session:
-            result = await session.run(query, params)
-            return [dict(record) async for record in result]
+            async def _work(tx: Any) -> list[dict]:
+                result = await tx.run(query, params)
+                return [dict(record) async for record in result]
+            return await session.execute_read(_work)
 
     async def execute_write(self, query: str, **params: object) -> list[dict]:
+        """Run a write query inside a write transaction with ACID guarantees and auto-retry."""
         async with self.driver.session() as session:
-            result = await session.run(query, params)
-            return [dict(record) async for record in result]
+            async def _work(tx: Any) -> list[dict]:
+                result = await tx.run(query, params)
+                return [dict(record) async for record in result]
+            return await session.execute_write(_work)

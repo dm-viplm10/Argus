@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_stream_writer
 
 from src.agent.base import StructuredOutputAgent
+from src.agent.cancellation import clear, is_cancelled
 from src.models.schemas import AuditEntry, SupervisorDecision
 from src.utils.logging import get_logger
 
@@ -29,28 +30,22 @@ class SupervisorAgent(StructuredOutputAgent):
         writer({"node": "supervisor", "status": "deciding", "iteration": iteration})
 
         research_id = state.get("research_id", "")
-        if research_id:
-            try:
-                from src.api.v1.research import clear_cancellation, is_job_cancelled
-
-                if is_job_cancelled(research_id):
-                    logger.info("supervisor_cancelled", research_id=research_id, iteration=iteration)
-                    clear_cancellation(research_id)
-                    writer({"node": "supervisor", "status": "cancelled"})
-                    return {
-                        "current_agent": "FINISH",
-                        "next_action": "FINISH",
-                        "supervisor_instructions": "",
-                        "iteration_count": iteration,
-                        "audit_log": [AuditEntry(
-                            node="supervisor",
-                            action="cancelled",
-                            timestamp=datetime.now(timezone.utc).isoformat(),
-                            output_summary="Job cancelled by user",
-                        ).model_dump()],
-                    }
-            except ImportError:
-                pass
+        if research_id and is_cancelled(research_id):
+            logger.info("supervisor_cancelled", research_id=research_id, iteration=iteration)
+            clear(research_id)
+            writer({"node": "supervisor", "status": "cancelled"})
+            return {
+                "current_agent": "FINISH",
+                "next_action": "FINISH",
+                "supervisor_instructions": "",
+                "iteration_count": iteration,
+                "audit_log": [AuditEntry(
+                    node="supervisor",
+                    action="cancelled",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    output_summary="Job cancelled by user",
+                ).model_dump()],
+            }
 
         prompt = self._prompt_registry.get_prompt(
             "supervisor",
@@ -102,7 +97,7 @@ class SupervisorAgent(StructuredOutputAgent):
         audit = AuditEntry(
             node="supervisor",
             action="route_decision",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             model_used="openai/gpt-4.1",
             output_summary=f"Routed to {decision.next_agent}: {decision.reasoning}",
             duration_ms=elapsed_ms,

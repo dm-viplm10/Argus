@@ -4,17 +4,24 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_stream_writer
 
 from src.agent.base import StructuredOutputAgent
+from src.models.llm_registry import MODEL_CONFIG
 from src.models.schemas import AuditEntry, RiskAssessment
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Per-input context budget (chars of JSON) — keeps the risk assessor's total prompt
+# within model token limits while preserving the most risk-relevant content.
+_MAX_FLAGS_CHARS = 10_000       # existing flags provided as de-duplication context
+_MAX_FINDINGS_CHARS = 40_000   # new verified facts to assess
+_MAX_RELATIONSHIPS_CHARS = 20_000  # relationship graph for structural risk signals
 
 
 class RiskAssessorAgent(StructuredOutputAgent):
@@ -56,9 +63,9 @@ class RiskAssessorAgent(StructuredOutputAgent):
             "risk_assessor",
             target_name=state["target_name"],
             target_context=state.get("target_context", ""),
-            existing_flags_json=json.dumps(existing_flags_summary, indent=2)[:10_000] if existing_flags_summary else "None identified yet.",
-            findings_json=json.dumps(new_verified, indent=2)[:40_000],
-            relationships_json=json.dumps(relationships, indent=2)[:20_000],
+            existing_flags_json=json.dumps(existing_flags_summary, indent=2)[:_MAX_FLAGS_CHARS] if existing_flags_summary else "None identified yet.",
+            findings_json=json.dumps(new_verified, indent=2)[:_MAX_FINDINGS_CHARS],
+            relationships_json=json.dumps(relationships, indent=2)[:_MAX_RELATIONSHIPS_CHARS],
         )
 
         start = time.monotonic()
@@ -76,11 +83,14 @@ class RiskAssessorAgent(StructuredOutputAgent):
         output = result if isinstance(result, RiskAssessment) else RiskAssessment()
         flags = [f.model_dump() for f in output.risk_flags]
 
+        model_spec = MODEL_CONFIG.get("risk_assessor")
+        model_slug = model_spec.slug if model_spec else "unknown"
+
         audit = AuditEntry(
             node="risk_assessor",
             action="assess_risk",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            model_used="openai/gpt-4.1",
+            timestamp=datetime.now(UTC).isoformat(),
+            model_used=model_slug,
             input_summary=f"Assessed {len(new_verified)} new verified facts ({already_assessed} already assessed), {len(existing_flags)} existing flags provided as context",
             output_summary=f"Identified {len(flags)} new risk flags, overall score: {output.overall_risk_score}",
             duration_ms=elapsed_ms,

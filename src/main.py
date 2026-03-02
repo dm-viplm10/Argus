@@ -5,20 +5,27 @@ from __future__ import annotations
 import uuid
 from contextlib import asynccontextmanager
 
+import redis.asyncio as aioredis
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.api.dependencies import set_checkpointer, set_neo4j_conn, set_redis_client, set_registry
+from src.agent.prompts.registry import PromptRegistry
+from src.api.dependencies import (
+    set_checkpointer,
+    set_neo4j_conn,
+    set_redis_client,
+    set_registry,
+    set_research_service,
+)
 from src.api.router import api_router
 from src.config import get_settings
 from src.graph_db.connection import Neo4jConnection
 from src.graph_db.schema import init_schema
 from src.models.llm_registry import LLMRegistry
+from src.services.research_service import ResearchService
 from src.utils.logging import get_logger, setup_logging
-
-import redis.asyncio as aioredis
 
 try:
     from langgraph_checkpoint_redis import AsyncRedisSaver
@@ -44,12 +51,18 @@ async def lifespan(app: FastAPI):
     registry = LLMRegistry(settings)
     set_registry(registry)
 
+    # Eagerly validate all prompt templates so missing files are caught at boot,
+    # not mid-run after LLM budget has been spent.
+    PromptRegistry().validate_all()
+    logger.info("prompt_templates_validated")
+
     # Shared Redis client (for job status and checkpointer)
     redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
     set_redis_client(redis_client)
     logger.info("redis_client_initialized")
 
     # Redis checkpointer
+    checkpointer = None
     if AsyncRedisSaver is not None:
         try:
             checkpointer = AsyncRedisSaver(redis_url=settings.REDIS_URL)
@@ -63,6 +76,11 @@ async def lifespan(app: FastAPI):
         logger.warning("redis_checkpointer_unavailable", error="langgraph-checkpoint-redis not installed")
         set_checkpointer(None)
 
+    # ResearchService — owns all job state and background graph execution
+    research_service = ResearchService(settings, registry, neo4j_conn, redis_client, checkpointer)
+    set_research_service(research_service)
+    logger.info("research_service_initialized")
+
     logger.info("app_started")
     yield
 
@@ -73,9 +91,10 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    # NOTE: Logging is configured inside the lifespan context where real settings are
+    # available. Do not call setup_logging here — it would run at import time with
+    # defaults and then be called a second time by lifespan, producing duplicate handlers.
     settings = get_settings()
-    setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
-
     application = FastAPI(
         title="Argus",
         description="Autonomous AI OSINT investigation agent",
@@ -83,12 +102,14 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # allow_origins=["*"] + allow_credentials=True is rejected by browsers (CORS spec).
+    # Use an explicit allow-list sourced from settings instead.
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.ALLOWED_ORIGINS,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["Content-Type", "X-Request-ID"],
     )
 
     application.include_router(api_router)

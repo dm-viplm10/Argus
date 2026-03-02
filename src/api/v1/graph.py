@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
 try:
-    from neo4j.time import DateTime, Date, Time, Duration
+    from neo4j.time import Date, DateTime, Duration, Time
     _NEO4J_TEMPORAL = (DateTime, Date, Time, Duration)
 except ImportError:
     _NEO4J_TEMPORAL = ()
@@ -17,9 +17,11 @@ except ImportError:
 from src.api.dependencies import get_neo4j
 from src.api.graph_image import render_graph_image
 from src.api.v1.schemas.graph import GraphEdge, GraphNode, GraphResponse
-from src.graph_db.connection import Neo4jConnection
 from src.graph_db.queries import GRAPH_FOR_RESEARCH
 from src.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from src.graph_db.connection import Neo4jConnection
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/graph", tags=["graph"])
@@ -36,26 +38,24 @@ def _sanitize_neo4j_value(value: Any) -> Any:
     return value
 
 
-@router.get("/{research_id}", response_model=GraphResponse)
-async def get_graph(
-    research_id: str,
-    neo4j: Neo4jConnection = Depends(get_neo4j),
-) -> GraphResponse:
-    """Get the identity graph for a research job as JSON (D3-compatible)."""
+async def _fetch_graph_data(research_id: str, neo4j: Neo4jConnection) -> GraphResponse:
+    """Shared graph data fetcher — not an endpoint.
+
+    Extracted so both ``get_graph`` and ``export_graph`` can call it without
+    the ``export_graph`` endpoint calling the ``get_graph`` endpoint function
+    directly (which would bypass FastAPI's dependency injection context).
+    """
     try:
-        results = await neo4j.execute_read(
-            GRAPH_FOR_RESEARCH,
-            research_id=research_id,
-        )
+        results = await neo4j.execute_read(GRAPH_FOR_RESEARCH, research_id=research_id)
     except Exception as exc:
         logger.error("graph_query_failed", research_id=research_id, error=str(exc))
-        raise HTTPException(status_code=500, detail="Graph query failed")
+        raise HTTPException(status_code=500, detail="Graph query failed") from exc
 
     nodes: list[GraphNode] = []
     edges: list[GraphEdge] = []
 
     if results:
-        record = results[0] if results else {}
+        record = results[0]
         for n in record.get("nodes", []):
             if n and n.get("id"):
                 nodes.append(GraphNode(
@@ -81,6 +81,15 @@ async def get_graph(
     )
 
 
+@router.get("/{research_id}", response_model=GraphResponse)
+async def get_graph(
+    research_id: str,
+    neo4j: Neo4jConnection = Depends(get_neo4j),
+) -> GraphResponse:
+    """Get the identity graph for a research job as JSON (D3-compatible)."""
+    return await _fetch_graph_data(research_id, neo4j)
+
+
 @router.get("/{research_id}/export")
 async def export_graph(
     research_id: str,
@@ -88,7 +97,7 @@ async def export_graph(
     neo4j: Neo4jConnection = Depends(get_neo4j),
 ) -> Response:
     """Export the identity graph in JSON, GraphML, PNG, or JPEG format."""
-    graph_data = await get_graph(research_id, neo4j)
+    graph_data = await _fetch_graph_data(research_id, neo4j)
 
     if format == "json":
         content = json.dumps(graph_data.model_dump(), indent=2)
@@ -109,16 +118,16 @@ async def export_graph(
     # Image export (PNG or JPEG)
     if format in ("png", "jpeg"):
         image_format: Literal["png", "jpeg"] = "png" if format == "png" else "jpeg"
-        content = render_graph_image(graph_data, format=image_format)
+        img_bytes = render_graph_image(graph_data, format=image_format)
         ext = "png" if format == "png" else "jpg"
         media_type = "image/png" if format == "png" else "image/jpeg"
         return Response(
-            content=content,
+            content=img_bytes,
             media_type=media_type,
             headers={"Content-Disposition": f"attachment; filename=graph_{research_id}.{ext}"},
         )
 
-    # Unreachable for valid Literal, but satisfy type checker
+    # Unreachable for valid Literal, but satisfies the type checker
     raise HTTPException(status_code=400, detail=f"Unsupported format: {format}")
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -162,7 +162,9 @@ class SearchAndAnalyzeAgent(ReActAgent):
         messages = result.get("messages", [])
         facts, entities, relationships, new_urls = _extract_findings(messages)
 
-        urls_visited: set[str] = set(state.get("urls_visited", set())) | new_urls
+        # Return only the delta — the Annotated[set, _merge_sets] reducer on ResearchState
+        # handles the union with the existing urls_visited automatically. Manually pre-merging
+        # here would cause the reducer to double-count on each phase.
 
         if not facts and not entities:
             logger.warning(
@@ -175,7 +177,7 @@ class SearchAndAnalyzeAgent(ReActAgent):
         executed = [
             {
                 "query": q,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "results_count": len(facts),
             }
             for q in queries_batch
@@ -184,7 +186,7 @@ class SearchAndAnalyzeAgent(ReActAgent):
         audit = AuditEntry(
             node="search_and_analyze",
             action="search_and_extract",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             model_used="google/gemini-2.5-flash",
             input_summary=(
                 f"Executed {len(queries_batch)} queries"
@@ -211,7 +213,7 @@ class SearchAndAnalyzeAgent(ReActAgent):
 
         return {
             "search_queries_executed": executed,
-            "urls_visited": urls_visited,
+            "urls_visited": new_urls,
             "pending_queries": remaining_queries,
             "extracted_facts": facts,
             "entities": entities,

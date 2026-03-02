@@ -4,17 +4,25 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_stream_writer
 
 from src.agent.base import StructuredOutputAgent
+from src.models.llm_registry import MODEL_CONFIG
 from src.models.schemas import AuditEntry
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Per-input context budget (chars of JSON). Tuned so the total prompt fits within
+# the synthesizer's context window while preserving the most actionable data.
+_MAX_VERIFIED_FACTS_CHARS = 30_000
+_MAX_ENTITIES_CHARS = 15_000
+_MAX_RISK_CHARS = 15_000
+_MAX_UNVERIFIED_CHARS = 10_000
 
 
 class SynthesizerAgent(StructuredOutputAgent):
@@ -32,10 +40,10 @@ class SynthesizerAgent(StructuredOutputAgent):
             "synthesizer",
             target_name=state["target_name"],
             target_context=state.get("target_context", ""),
-            verified_facts_json=json.dumps(state.get("verified_facts", []), indent=2)[:30_000],
-            entities_json=json.dumps(state.get("entities", []), indent=2)[:15_000],
-            risk_json=json.dumps(state.get("risk_flags", []), indent=2)[:15_000],
-            unverified_json=json.dumps(state.get("unverified_claims", []), indent=2)[:10_000],
+            verified_facts_json=json.dumps(state.get("verified_facts", []), indent=2)[:_MAX_VERIFIED_FACTS_CHARS],
+            entities_json=json.dumps(state.get("entities", []), indent=2)[:_MAX_ENTITIES_CHARS],
+            risk_json=json.dumps(state.get("risk_flags", []), indent=2)[:_MAX_RISK_CHARS],
+            unverified_json=json.dumps(state.get("unverified_claims", []), indent=2)[:_MAX_UNVERIFIED_CHARS],
             searches_count=len(state.get("search_queries_executed", [])),
             sources_count=len(state.get("urls_visited", set())),
             phases_completed=state.get("current_phase", 0),
@@ -50,15 +58,21 @@ class SynthesizerAgent(StructuredOutputAgent):
             ],
         )
         elapsed_ms = int((time.monotonic() - start) * 1000)
+        usage = self._router.last_usage
 
         report = getattr(result, "content", str(result))
+
+        model_spec = MODEL_CONFIG.get("synthesizer")
+        model_slug = model_spec.slug if model_spec else "unknown"
 
         audit = AuditEntry(
             node="synthesizer",
             action="generate_report",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            model_used="openai/gpt-4.1",
+            timestamp=datetime.now(UTC).isoformat(),
+            model_used=model_slug,
             output_summary=f"Generated report with {len(report)} characters",
+            tokens_consumed=usage["tokens"],
+            cost_usd=usage["cost"],
             duration_ms=elapsed_ms,
         )
 
