@@ -25,18 +25,27 @@ from lib.api import (
 )
 from lib.sse import parse_sse_stream
 
-# One-liner message for each graph node (shown in expander with spinner).
+# Symbol + one-liner for each graph node (shown in expander with spinner).
 NODE_STEP_MESSAGES = {
-    "supervisor": "Coordinating next step…",
-    "planner": "Planning research phases…",
-    "phase_strategist": "Deciding phase strategy…",
-    "query_refiner": "Refining search queries…",
-    "search_and_analyze": "Searching and analyzing sources…",
-    "verifier": "Verifying facts…",
-    "risk_assessor": "Assessing risks…",
-    "graph_builder": "Building identity graph…",
-    "synthesizer": "Writing final report…",
+    "supervisor": ("🎯", "Coordinating next step…"),
+    "planner": ("📋", "Planning research phases…"),
+    "phase_strategist": ("🔄", "Deciding phase strategy…"),
+    "query_refiner": ("🔎", "Refining search queries…"),
+    "search_and_analyze": ("🌐", "Searching and analyzing sources…"),
+    "verifier": ("✅", "Verifying facts…"),
+    "risk_assessor": ("⚠️", "Assessing risks…"),
+    "graph_builder": ("🕸️", "Building identity graph…"),
+    "synthesizer": ("📝", "Writing final report…"),
 }
+
+
+def _step_display(node: str) -> str:
+    """Return a single line with symbol + message for the current step."""
+    entry = NODE_STEP_MESSAGES.get(node)
+    if entry:
+        symbol, msg = entry
+        return f"{symbol} {msg}"
+    return "⏳ Running…" if node else "▶️ Starting…"
 
 
 # Page config
@@ -169,16 +178,18 @@ if nav == "Research":
                                 with report_placeholder.container():
                                     st.subheader("Final report")
                                     st.markdown(report_content)
+                            else:
+                                if data.get("node") and data["node"] != "synthesizer":
+                                    current_node = data["node"]
 
                         if not synthesizer_streaming:
-                            step_msg = NODE_STEP_MESSAGES.get(
-                                current_node, "Running…" if current_node else "Starting…"
-                            )
+                            step_display = _step_display(current_node)
                             with collapsible_placeholder.container():
                                 with st.expander("Research progress", expanded=True):
-                                    with st.spinner(step_msg):
+                                    with st.spinner(step_display):
+                                        st.write(step_display)
                                         if current_tool:
-                                            st.caption(f"Using: **{current_tool}**")
+                                            st.caption(f"🔧 Using: **{current_tool}**")
 
                         if event_type == "done":
                             break

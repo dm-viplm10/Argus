@@ -9,6 +9,9 @@ build/
 .pytest_cache/
 .mypy_cache/
 .cursor/
+.claude/
+.DS_Store
 src/evaluation/reports/
 *.log
 uv.lock
+artifacts/
