@@ -10,7 +10,6 @@ from langgraph.config import get_stream_writer
 
 from src.agent.base import ToolNode
 from src.graph_db.queries import (
-    CREATE_RELATIONSHIP_NO_APOC,
     MERGE_DOCUMENT,
     MERGE_FUND,
     MERGE_LOCATION,
@@ -105,17 +104,6 @@ class GraphBuilderNode(ToolNode):
                     logger.error("graph_rel_create_failed", rel=f"{from_name}->{to_name}", rel_type=rel_type, error=str(exc))
             else:
                 logger.warning("unknown_rel_type_fallback", rel_type=rel_type, from_name=from_name, to_name=to_name)
-                try:
-                    await self._neo4j_conn.execute_write(
-                        CREATE_RELATIONSHIP_NO_APOC,
-                        from_name=from_name,
-                        to_name=to_name,
-                        rel_type=rel_type,
-                        properties=props,
-                    )
-                    rels_created.append(f"{from_name}-[{rel_type}]->{to_name}")
-                except Exception as exc:
-                    logger.error("graph_rel_create_failed", rel=f"{from_name}->{to_name}", rel_type=rel_type, error=str(exc))
 
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
