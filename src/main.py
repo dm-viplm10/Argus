@@ -11,12 +11,19 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.api.dependencies import set_checkpointer, set_neo4j_conn, set_redis_client, set_registry
+from src.api.dependencies import (
+    set_checkpointer,
+    set_neo4j_conn,
+    set_redis_client,
+    set_registry,
+    set_research_service,
+)
 from src.api.router import api_router
 from src.config import get_settings
 from src.graph_db.connection import Neo4jConnection
 from src.graph_db.schema import init_schema
 from src.models.llm_registry import LLMRegistry
+from src.services.research_service import ResearchService
 from src.utils.logging import get_logger, setup_logging
 
 try:
@@ -49,6 +56,7 @@ async def lifespan(app: FastAPI):
     logger.info("redis_client_initialized")
 
     # Redis checkpointer
+    checkpointer = None
     if AsyncRedisSaver is not None:
         try:
             checkpointer = AsyncRedisSaver(redis_url=settings.REDIS_URL)
@@ -61,6 +69,11 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("redis_checkpointer_unavailable", error="langgraph-checkpoint-redis not installed")
         set_checkpointer(None)
+
+    # ResearchService — owns all job state and background graph execution
+    research_service = ResearchService(settings, registry, neo4j_conn, redis_client, checkpointer)
+    set_research_service(research_service)
+    logger.info("research_service_initialized")
 
     logger.info("app_started")
     yield

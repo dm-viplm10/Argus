@@ -3,20 +3,26 @@
 from __future__ import annotations
 
 import json
-from typing import Any
-
-import redis.asyncio as aioredis
+from typing import TYPE_CHECKING, Any
 
 from src.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    import redis.asyncio as aioredis
 
 logger = get_logger(__name__)
 
 
 class CacheService:
-    """Redis-backed cache for search results and research state."""
+    """Redis-backed cache for search results and research state.
 
-    def __init__(self, redis_url: str) -> None:
-        self._client = aioredis.from_url(redis_url, decode_responses=True)
+    Accepts the shared application Redis client created at startup — it does
+    *not* own the connection and does not close it. Callers must ensure the
+    client is initialised before constructing this service.
+    """
+
+    def __init__(self, redis_client: aioredis.Redis) -> None:
+        self._client = redis_client
 
     async def get(self, key: str) -> Any | None:
         raw = await self._client.get(key)
@@ -37,6 +43,3 @@ class CacheService:
 
     async def cache_search(self, query: str, results: list[dict]) -> None:
         await self.set(f"search:{query}", results, ttl=3600)
-
-    async def close(self) -> None:
-        await self._client.aclose()

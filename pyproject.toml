@@ -43,7 +43,11 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "TCH"]
-ignore = ["E501"]
+ignore = [
+    "E501",
+    # FastAPI uses Depends() / Query() in argument defaults by design; B008 is a false positive here.
+    "B008",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["src"]

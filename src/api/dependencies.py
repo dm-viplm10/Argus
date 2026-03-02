@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import redis.asyncio as aioredis
-
-from src.config import Settings, get_settings
-from src.graph_db.connection import Neo4jConnection
-from src.models.llm_registry import LLMRegistry
 from src.models.model_router import ModelRouter
+
+if TYPE_CHECKING:
+    import redis.asyncio as aioredis
+
+    from src.graph_db.connection import Neo4jConnection
+    from src.models.llm_registry import LLMRegistry
+    from src.services.research_service import ResearchService
 
 _neo4j_conn: Neo4jConnection | None = None
 _registry: LLMRegistry | None = None
 _router: ModelRouter | None = None
 _checkpointer: Any = None
 _redis_client: aioredis.Redis | None = None
+_research_service: ResearchService | None = None
 
 
 def set_neo4j_conn(conn: Neo4jConnection) -> None:
@@ -63,3 +66,14 @@ def set_redis_client(client: aioredis.Redis) -> None:
 
 def get_redis() -> aioredis.Redis | None:
     return _redis_client
+
+
+def set_research_service(svc: ResearchService) -> None:
+    global _research_service
+    _research_service = svc
+
+
+def get_research_service() -> ResearchService:
+    if _research_service is None:
+        raise RuntimeError("ResearchService not initialized")
+    return _research_service
