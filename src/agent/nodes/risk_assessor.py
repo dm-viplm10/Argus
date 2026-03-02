@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_stream_writer
 
 from src.agent.base import StructuredOutputAgent
+from src.models.llm_registry import MODEL_CONFIG
 from src.models.schemas import AuditEntry, RiskAssessment
 from src.utils.logging import get_logger
 
@@ -76,11 +77,14 @@ class RiskAssessorAgent(StructuredOutputAgent):
         output = result if isinstance(result, RiskAssessment) else RiskAssessment()
         flags = [f.model_dump() for f in output.risk_flags]
 
+        model_spec = MODEL_CONFIG.get("risk_assessor")
+        model_slug = model_spec.slug if model_spec else "unknown"
+
         audit = AuditEntry(
             node="risk_assessor",
             action="assess_risk",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            model_used="openai/gpt-4.1",
+            timestamp=datetime.now(UTC).isoformat(),
+            model_used=model_slug,
             input_summary=f"Assessed {len(new_verified)} new verified facts ({already_assessed} already assessed), {len(existing_flags)} existing flags provided as context",
             output_summary=f"Identified {len(flags)} new risk flags, overall score: {output.overall_risk_score}",
             duration_ms=elapsed_ms,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from contextlib import asynccontextmanager
 
+import redis.asyncio as aioredis
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,8 +18,6 @@ from src.graph_db.connection import Neo4jConnection
 from src.graph_db.schema import init_schema
 from src.models.llm_registry import LLMRegistry
 from src.utils.logging import get_logger, setup_logging
-
-import redis.asyncio as aioredis
 
 try:
     from langgraph_checkpoint_redis import AsyncRedisSaver
@@ -73,9 +72,9 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    settings = get_settings()
-    setup_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
-
+    # NOTE: Logging is configured inside the lifespan context where real settings are
+    # available. Do not call setup_logging here — it would run at import time with
+    # defaults and then be called a second time by lifespan, producing duplicate handlers.
     application = FastAPI(
         title="Argus",
         description="Autonomous AI OSINT investigation agent",

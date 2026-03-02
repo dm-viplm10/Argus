@@ -9,7 +9,6 @@ from typing import Any
 from langsmith import traceable
 
 from src.evaluation.evaluator import run_evaluation
-from src.evaluation.metrics import compute_metrics
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -24,8 +23,13 @@ class EvaluationService:
         state: dict[str, Any],
         ground_truth_file: str,
     ) -> dict[str, Any]:
-        metrics, summary = await run_evaluation(state, ground_truth_file)
-        return {"metrics": metrics.model_dump(), "summary": summary}
+        # run_evaluation returns a 3-tuple: (metrics, summary, evaluation_report)
+        metrics, summary, evaluation_report = await run_evaluation(state, ground_truth_file)
+        return {
+            "metrics": metrics.model_dump(),
+            "summary": summary,
+            "report": evaluation_report,
+        }
 
     @staticmethod
     async def upload_ground_truth_to_langsmith(

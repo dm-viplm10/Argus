@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import random
-from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -49,15 +48,16 @@ class WebScrapeTool(BaseTool):
         return await self._scrape(url)
 
     def _run(self, url: str) -> str:
-        return asyncio.get_event_loop().run_until_complete(self._scrape(url))
+        return asyncio.run(self._scrape(url))
 
     async def _scrape(self, url: str) -> str:
         domain = urlparse(url).netloc
-        now = asyncio.get_event_loop().time()
+        loop = asyncio.get_running_loop()
+        now = loop.time()
         last = _domain_last_request.get(domain, 0.0)
         if now - last < _POLITENESS_DELAY:
             await asyncio.sleep(_POLITENESS_DELAY - (now - last))
-        _domain_last_request[domain] = asyncio.get_event_loop().time()
+        _domain_last_request[domain] = loop.time()
 
         last_error: Exception | None = None
         for attempt in range(self.max_retries):

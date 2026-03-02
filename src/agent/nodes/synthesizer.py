@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_stream_writer
 
 from src.agent.base import StructuredOutputAgent
+from src.models.llm_registry import MODEL_CONFIG
 from src.models.schemas import AuditEntry
 from src.utils.logging import get_logger
 
@@ -50,15 +51,21 @@ class SynthesizerAgent(StructuredOutputAgent):
             ],
         )
         elapsed_ms = int((time.monotonic() - start) * 1000)
+        usage = self._router.last_usage
 
         report = getattr(result, "content", str(result))
+
+        model_spec = MODEL_CONFIG.get("synthesizer")
+        model_slug = model_spec.slug if model_spec else "unknown"
 
         audit = AuditEntry(
             node="synthesizer",
             action="generate_report",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            model_used="openai/gpt-4.1",
+            timestamp=datetime.now(UTC).isoformat(),
+            model_used=model_slug,
             output_summary=f"Generated report with {len(report)} characters",
+            tokens_consumed=usage["tokens"],
+            cost_usd=usage["cost"],
             duration_ms=elapsed_ms,
         )
 
