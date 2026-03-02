@@ -17,6 +17,13 @@ from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Per-input context budget (chars of JSON). Tuned so the total prompt fits within
+# the synthesizer's context window while preserving the most actionable data.
+_MAX_VERIFIED_FACTS_CHARS = 30_000
+_MAX_ENTITIES_CHARS = 15_000
+_MAX_RISK_CHARS = 15_000
+_MAX_UNVERIFIED_CHARS = 10_000
+
 
 class SynthesizerAgent(StructuredOutputAgent):
     """Generates the final comprehensive Markdown research report."""
@@ -33,10 +40,10 @@ class SynthesizerAgent(StructuredOutputAgent):
             "synthesizer",
             target_name=state["target_name"],
             target_context=state.get("target_context", ""),
-            verified_facts_json=json.dumps(state.get("verified_facts", []), indent=2)[:30_000],
-            entities_json=json.dumps(state.get("entities", []), indent=2)[:15_000],
-            risk_json=json.dumps(state.get("risk_flags", []), indent=2)[:15_000],
-            unverified_json=json.dumps(state.get("unverified_claims", []), indent=2)[:10_000],
+            verified_facts_json=json.dumps(state.get("verified_facts", []), indent=2)[:_MAX_VERIFIED_FACTS_CHARS],
+            entities_json=json.dumps(state.get("entities", []), indent=2)[:_MAX_ENTITIES_CHARS],
+            risk_json=json.dumps(state.get("risk_flags", []), indent=2)[:_MAX_RISK_CHARS],
+            unverified_json=json.dumps(state.get("unverified_claims", []), indent=2)[:_MAX_UNVERIFIED_CHARS],
             searches_count=len(state.get("search_queries_executed", [])),
             sources_count=len(state.get("urls_visited", set())),
             phases_completed=state.get("current_phase", 0),

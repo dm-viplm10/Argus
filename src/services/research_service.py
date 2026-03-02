@@ -303,178 +303,36 @@ class ResearchService:
         Raw LangGraph events are pushed into the job's event queue. The SSE
         endpoint pulls them out and maps them to the client-facing format via
         src.api.v1.sse_mapper — keeping SSE formatting out of this service.
-        """
-        from src.agent.graph import compile_research_graph
 
+        A hard wall-clock timeout (``RESEARCH_TIMEOUT_SECONDS``) is applied via
+        ``asyncio.wait_for`` around ``_execute_graph`` so a runaway LLM loop
+        cannot consume unbounded API budget.
+        """
         queue = self._event_queues.get(research_id)
         self._jobs[research_id]["status"] = "running"
 
         try:
-            graph = compile_research_graph(
-                self._settings, self._registry, self._neo4j,
-                checkpointer=self._checkpointer,
+            await asyncio.wait_for(
+                self._execute_graph(research_id, request, queue),
+                timeout=self._settings.RESEARCH_TIMEOUT_SECONDS,
             )
 
-            use_dynamic_phases = request.max_depth is None
-            max_phases = 1 if use_dynamic_phases else request.max_depth
-
-            initial_state: dict[str, Any] = {
-                "research_id": research_id,
-                "target_name": request.target_name,
-                "target_context": request.target_context,
-                "research_objectives": request.objectives,
-                "current_phase": 0,
-                "max_phases": max_phases,
-                "dynamic_phases": use_dynamic_phases,
-                "iteration_count": 0,
-                "phase_complete": False,
-                "supervisor_instructions": "",
-                "current_phase_searched": False,
-                "current_phase_verified": False,
-                "current_phase_risk_assessed": False,
-                "facts_verified_count": 0,
-                "risk_assessed_facts_count": 0,
-                "search_queries_executed": [],
-                "urls_visited": set(),
-                "extracted_facts": [],
-                "entities": [],
-                "relationships": [],
-                "contradictions": [],
-                "verified_facts": [],
-                "unverified_claims": [],
-                "risk_flags": [],
-                "overall_risk_score": None,
-                "graph_nodes_created": [],
-                "graph_relationships_created": [],
-                "final_report": None,
-                "total_tokens_used": 0,
-                "total_cost_usd": 0.0,
-                "errors": [],
-                "audit_log": [],
-            }
-
-            # Full config for graph execution; minimal config for checkpoint reads.
-            config = {"configurable": {"thread_id": research_id}, "recursion_limit": 150}
-            ckpt_config = {"configurable": {"thread_id": research_id}}
-
-            event_captured_state: dict[str, Any] = {}
-
-            async for raw in graph.astream_events(
-                initial_state,
-                config,
-                version="v2",
-                include_types=["chain", "chat_model", "tool"],
-            ):
-                # Push raw event for the SSE endpoint to map and forward
-                if queue is not None:
-                    await queue.put(raw)
-
-                # Capture final state from the root graph completion event.
-                # The root event's name is NOT in _STATE_INDICATOR_KEYS (those are
-                # node-level keys); but its output dict CONTAINS those keys.
-                if (
-                    raw.get("event") == "on_chain_end"
-                    and raw.get("name") not in {"", "__start__"}
-                ):
-                    output = raw.get("data", {}).get("output")
-                    if isinstance(output, dict) and output.keys() & _STATE_INDICATOR_KEYS:
-                        event_captured_state = output
-                        logger.debug(
-                            "state_observed_in_root_event",
-                            research_id=research_id,
-                            chain_name=raw.get("name"),
-                        )
-
-            # ── Three-path state capture (priority order) ─────────────────
-            final_state: dict[str, Any] = {}
-            try:
-                if self._checkpointer is not None:
-                    snapshot = await graph.aget_state(ckpt_config)
-                    if snapshot and snapshot.values:
-                        final_state = self._serialize_state_for_eval(snapshot.values)
-                        logger.info(
-                            "state_captured_via_aget_state",
-                            research_id=research_id,
-                            verified_facts=len(final_state.get("verified_facts", [])),
-                        )
-                    else:
-                        logger.warning("aget_state_returned_empty", research_id=research_id)
-
-                    if not final_state:
-                        raw_ckpt = await self._checkpointer.aget(ckpt_config)
-                        if raw_ckpt and "channel_values" in raw_ckpt:
-                            final_state = self._serialize_state_for_eval(
-                                raw_ckpt["channel_values"]
-                            )
-                            logger.info(
-                                "state_captured_via_direct_checkpoint",
-                                research_id=research_id,
-                                verified_facts=len(final_state.get("verified_facts", [])),
-                            )
-                        else:
-                            logger.warning(
-                                "direct_checkpoint_also_empty", research_id=research_id
-                            )
-                else:
-                    logger.warning(
-                        "no_checkpointer_eval_state_unavailable",
-                        research_id=research_id,
-                        hint="Install langgraph-checkpoint-redis and set REDIS_URL",
-                    )
-
-                if not final_state and event_captured_state:
-                    final_state = self._serialize_state_for_eval(event_captured_state)
-                    logger.info(
-                        "state_captured_from_stream_event",
-                        research_id=research_id,
-                        verified_facts=len(final_state.get("verified_facts", [])),
-                    )
-
-                if not final_state:
-                    logger.error(
-                        "all_state_capture_paths_failed",
-                        research_id=research_id,
-                        checkpointer_set=self._checkpointer is not None,
-                    )
-
-            except Exception as exc:
-                # State capture failure must never block the completed status update.
-                logger.warning(
-                    "final_state_capture_failed",
-                    research_id=research_id,
-                    error=str(exc),
-                    exc_type=type(exc).__name__,
-                )
-
-            # Update in-memory record
+        except TimeoutError:
             self._jobs[research_id].update({
-                "status": "completed",
-                "state": final_state,
-                "final_report": final_state.get("final_report"),
-                "facts_count": len(final_state.get("verified_facts", [])),
-                "entities_count": len(final_state.get("entities", [])),
-                "risk_flags_count": len(final_state.get("risk_flags", [])),
-                "overall_risk_score": final_state.get("overall_risk_score"),
-                "audit_log": final_state.get("audit_log", []),
+                "status": "failed",
+                "error": f"timed out after {self._settings.RESEARCH_TIMEOUT_SECONDS}s",
             })
-
-            # Persist to Redis
-            await self._redis_set_research_state(research_id, final_state)
-            await self._redis_set_job(research_id, {
-                "status": "completed",
-                "final_report": final_state.get("final_report"),
-                "facts_count": len(final_state.get("verified_facts", [])),
-                "entities_count": len(final_state.get("entities", [])),
-                "risk_flags_count": len(final_state.get("risk_flags", [])),
-                "overall_risk_score": final_state.get("overall_risk_score"),
-            })
-
-            logger.info(
-                "research_completed",
+            await self._redis_set_job(
+                research_id,
+                {
+                    "status": "failed",
+                    "error": f"timed out after {self._settings.RESEARCH_TIMEOUT_SECONDS}s",
+                },
+            )
+            logger.error(
+                "research_timeout",
                 research_id=research_id,
-                verified_facts=len(final_state.get("verified_facts", [])),
-                entities=len(final_state.get("entities", [])),
-                risk_flags=len(final_state.get("risk_flags", [])),
+                timeout_seconds=self._settings.RESEARCH_TIMEOUT_SECONDS,
             )
 
         except asyncio.CancelledError:
@@ -492,3 +350,185 @@ class ResearchService:
                 await queue.put(None)  # sentinel: tells the SSE consumer the stream is done
             self._inline_tasks.pop(research_id, None)
             clear(research_id)
+
+    async def _execute_graph(
+        self,
+        research_id: str,
+        request: ResearchRequest,
+        queue: asyncio.Queue | None,
+    ) -> None:
+        """Execute the LangGraph pipeline, capture final state, and persist results.
+
+        Extracted from ``_run_job`` so ``asyncio.wait_for`` can apply a hard
+        timeout to the entire execution — including streaming, state capture,
+        and Redis writes — without duplicating the cleanup logic in the
+        ``finally`` block of ``_run_job``.
+        """
+        from src.agent.graph import compile_research_graph
+
+        graph = compile_research_graph(
+            self._settings, self._registry, self._neo4j,
+            checkpointer=self._checkpointer,
+        )
+
+        use_dynamic_phases = request.max_depth is None
+        max_phases = 1 if use_dynamic_phases else request.max_depth
+
+        initial_state: dict[str, Any] = {
+            "research_id": research_id,
+            "target_name": request.target_name,
+            "target_context": request.target_context,
+            "research_objectives": request.objectives,
+            "current_phase": 0,
+            "max_phases": max_phases,
+            "dynamic_phases": use_dynamic_phases,
+            "iteration_count": 0,
+            "phase_complete": False,
+            "supervisor_instructions": "",
+            "current_phase_searched": False,
+            "current_phase_verified": False,
+            "current_phase_risk_assessed": False,
+            "facts_verified_count": 0,
+            "risk_assessed_facts_count": 0,
+            "search_queries_executed": [],
+            "urls_visited": set(),
+            "extracted_facts": [],
+            "entities": [],
+            "relationships": [],
+            "contradictions": [],
+            "verified_facts": [],
+            "unverified_claims": [],
+            "risk_flags": [],
+            "overall_risk_score": None,
+            "graph_nodes_created": [],
+            "graph_relationships_created": [],
+            "final_report": None,
+            "total_tokens_used": 0,
+            "total_cost_usd": 0.0,
+            "errors": [],
+            "audit_log": [],
+        }
+
+        # Full config for graph execution; minimal config for checkpoint reads.
+        config = {"configurable": {"thread_id": research_id}, "recursion_limit": 150}
+        ckpt_config = {"configurable": {"thread_id": research_id}}
+
+        event_captured_state: dict[str, Any] = {}
+
+        async for raw in graph.astream_events(
+            initial_state,
+            config,
+            version="v2",
+            include_types=["chain", "chat_model", "tool"],
+        ):
+            # Push raw event for the SSE endpoint to map and forward
+            if queue is not None:
+                await queue.put(raw)
+
+            # Capture final state from the root graph completion event.
+            # The root event's name is NOT in _STATE_INDICATOR_KEYS (those are
+            # node-level keys); but its output dict CONTAINS those keys.
+            if (
+                raw.get("event") == "on_chain_end"
+                and raw.get("name") not in {"", "__start__"}
+            ):
+                output = raw.get("data", {}).get("output")
+                if isinstance(output, dict) and output.keys() & _STATE_INDICATOR_KEYS:
+                    event_captured_state = output
+                    logger.debug(
+                        "state_observed_in_root_event",
+                        research_id=research_id,
+                        chain_name=raw.get("name"),
+                    )
+
+        # ── Three-path state capture (priority order) ─────────────────────
+        final_state: dict[str, Any] = {}
+        try:
+            if self._checkpointer is not None:
+                snapshot = await graph.aget_state(ckpt_config)
+                if snapshot and snapshot.values:
+                    final_state = self._serialize_state_for_eval(snapshot.values)
+                    logger.info(
+                        "state_captured_via_aget_state",
+                        research_id=research_id,
+                        verified_facts=len(final_state.get("verified_facts", [])),
+                    )
+                else:
+                    logger.warning("aget_state_returned_empty", research_id=research_id)
+
+                if not final_state:
+                    raw_ckpt = await self._checkpointer.aget(ckpt_config)
+                    if raw_ckpt and "channel_values" in raw_ckpt:
+                        final_state = self._serialize_state_for_eval(
+                            raw_ckpt["channel_values"]
+                        )
+                        logger.info(
+                            "state_captured_via_direct_checkpoint",
+                            research_id=research_id,
+                            verified_facts=len(final_state.get("verified_facts", [])),
+                        )
+                    else:
+                        logger.warning(
+                            "direct_checkpoint_also_empty", research_id=research_id
+                        )
+            else:
+                logger.warning(
+                    "no_checkpointer_eval_state_unavailable",
+                    research_id=research_id,
+                    hint="Install langgraph-checkpoint-redis and set REDIS_URL",
+                )
+
+            if not final_state and event_captured_state:
+                final_state = self._serialize_state_for_eval(event_captured_state)
+                logger.info(
+                    "state_captured_from_stream_event",
+                    research_id=research_id,
+                    verified_facts=len(final_state.get("verified_facts", [])),
+                )
+
+            if not final_state:
+                logger.error(
+                    "all_state_capture_paths_failed",
+                    research_id=research_id,
+                    checkpointer_set=self._checkpointer is not None,
+                )
+
+        except Exception as exc:
+            # State capture failure must never block the completed status update.
+            logger.warning(
+                "final_state_capture_failed",
+                research_id=research_id,
+                error=str(exc),
+                exc_type=type(exc).__name__,
+            )
+
+        # Update in-memory record
+        self._jobs[research_id].update({
+            "status": "completed",
+            "state": final_state,
+            "final_report": final_state.get("final_report"),
+            "facts_count": len(final_state.get("verified_facts", [])),
+            "entities_count": len(final_state.get("entities", [])),
+            "risk_flags_count": len(final_state.get("risk_flags", [])),
+            "overall_risk_score": final_state.get("overall_risk_score"),
+            "audit_log": final_state.get("audit_log", []),
+        })
+
+        # Persist to Redis
+        await self._redis_set_research_state(research_id, final_state)
+        await self._redis_set_job(research_id, {
+            "status": "completed",
+            "final_report": final_state.get("final_report"),
+            "facts_count": len(final_state.get("verified_facts", [])),
+            "entities_count": len(final_state.get("entities", [])),
+            "risk_flags_count": len(final_state.get("risk_flags", [])),
+            "overall_risk_score": final_state.get("overall_risk_score"),
+        })
+
+        logger.info(
+            "research_completed",
+            research_id=research_id,
+            verified_facts=len(final_state.get("verified_facts", [])),
+            entities=len(final_state.get("entities", [])),
+            risk_flags=len(final_state.get("risk_flags", [])),
+        )

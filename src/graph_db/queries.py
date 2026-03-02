@@ -36,16 +36,12 @@ SET d += $properties
 RETURN d
 """
 
-CREATE_RELATIONSHIP = """
-MATCH (a {name: $from_name}), (b {name: $to_name})
-CALL apoc.merge.relationship(a, $rel_type, {}, $properties, b, {})
-YIELD rel
-RETURN rel
-"""
+# The APOC-based CREATE_RELATIONSHIP was removed — it required the APOC plugin
+# and was never called at runtime (graph_builder.py uses TYPED_RELATIONSHIP_QUERIES).
+# TYPED_RELATIONSHIP_QUERIES is the authoritative implementation; see below.
 
-# Fallback used when APOC is unavailable — preserves all typed relationships
-# without dynamic Cypher. Each template matches a relationship type the analyzer
-# is instructed to produce (see analyzer prompt).
+# Typed-relationship templates — the only relationship creation path used at runtime.
+# Each entry matches one relationship type the search_and_analyze prompt produces.
 _TYPED_REL_TEMPLATE = "MATCH (a {{name: $from_name}}), (b {{name: $to_name}}) MERGE (a)-[r:{rel_type}]->(b) SET r += $properties RETURN r"
 
 TYPED_RELATIONSHIP_QUERIES: dict[str, str] = {
@@ -62,14 +58,6 @@ TYPED_RELATIONSHIP_QUERIES: dict[str, str] = {
         "MENTIONED_IN",
     )
 }
-
-# Kept for reference / migration; no longer used at runtime
-CREATE_RELATIONSHIP_NO_APOC = """
-MATCH (a {name: $from_name}), (b {name: $to_name})
-MERGE (a)-[r:ASSOCIATED_WITH]->(b)
-SET r += $properties, r.rel_subtype = $rel_type
-RETURN r
-"""
 
 SHORTEST_PATH = """
 MATCH path = shortestPath((a:Person {name: $from_name})-[*..6]-(b {name: $to_name}))

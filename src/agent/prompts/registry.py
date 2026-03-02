@@ -12,6 +12,20 @@ from pathlib import Path
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
+# All task names that must have a corresponding .md template file.
+# Used by validate_all() to detect missing templates at startup rather than
+# mid-pipeline (after LLM budget has already been spent).
+_REQUIRED_TASKS: frozenset[str] = frozenset({
+    "supervisor",
+    "planner",
+    "phase_strategist",
+    "query_refiner",
+    "search_and_analyze",
+    "verifier",
+    "risk_assessor",
+    "synthesizer",
+})
+
 
 class PromptRegistry:
     """Registry for agent prompt templates. Loads from .md files on first use."""
@@ -30,3 +44,16 @@ class PromptRegistry:
     def get_prompt(self, task: str, **kwargs: object) -> str:
         """Return the formatted prompt for the given task."""
         return self._load(task).substitute(kwargs)
+
+    def validate_all(self) -> None:
+        """Eagerly load and validate every required template.
+
+        Call this once at application startup so missing or malformed template
+        files raise immediately, before any research run is attempted.
+
+        Raises:
+            KeyError: If a required template file is absent.
+            ValueError: If ``string.Template`` cannot parse the file contents.
+        """
+        for task in sorted(_REQUIRED_TASKS):
+            self._load(task)

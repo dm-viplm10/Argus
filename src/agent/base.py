@@ -30,9 +30,8 @@ class StructuredOutputAgent(BaseAgent):
         self._router = router
         self._prompt_registry = prompt_registry
 
-    async def run(self, state: dict[str, Any]) -> dict[str, Any]:
-        """Run the structured output agent. Subclasses override _build_prompt_kwargs and _build_updates."""
-        raise NotImplementedError
+    @abstractmethod
+    async def run(self, state: dict[str, Any]) -> dict[str, Any]: ...
 
 
 class ReActAgent(BaseAgent):
@@ -45,9 +44,8 @@ class ReActAgent(BaseAgent):
         self._settings = settings
         self._prompt_registry = prompt_registry
 
-    async def run(self, state: dict[str, Any]) -> dict[str, Any]:
-        """Run the ReAct agent. Subclasses override _build_system_prompt, _build_user_message, _get_tools, _extract_output."""
-        raise NotImplementedError
+    @abstractmethod
+    async def run(self, state: dict[str, Any]) -> dict[str, Any]: ...
 
 
 class ToolNode(BaseAgent):
@@ -56,6 +54,5 @@ class ToolNode(BaseAgent):
     def __init__(self, *, neo4j_conn: Any) -> None:
         self._neo4j_conn = neo4j_conn
 
-    async def run(self, state: dict[str, Any]) -> dict[str, Any]:
-        """Run the tool node. Subclasses override with their logic."""
-        raise NotImplementedError
+    @abstractmethod
+    async def run(self, state: dict[str, Any]) -> dict[str, Any]: ...

@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.agent.prompts.registry import PromptRegistry
 from src.api.dependencies import (
     set_checkpointer,
     set_neo4j_conn,
@@ -50,6 +51,11 @@ async def lifespan(app: FastAPI):
     registry = LLMRegistry(settings)
     set_registry(registry)
 
+    # Eagerly validate all prompt templates so missing files are caught at boot,
+    # not mid-run after LLM budget has been spent.
+    PromptRegistry().validate_all()
+    logger.info("prompt_templates_validated")
+
     # Shared Redis client (for job status and checkpointer)
     redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
     set_redis_client(redis_client)
@@ -88,6 +94,7 @@ def create_app() -> FastAPI:
     # NOTE: Logging is configured inside the lifespan context where real settings are
     # available. Do not call setup_logging here — it would run at import time with
     # defaults and then be called a second time by lifespan, producing duplicate handlers.
+    settings = get_settings()
     application = FastAPI(
         title="Argus",
         description="Autonomous AI OSINT investigation agent",
@@ -95,12 +102,14 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # allow_origins=["*"] + allow_credentials=True is rejected by browsers (CORS spec).
+    # Use an explicit allow-list sourced from settings instead.
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.ALLOWED_ORIGINS,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["Content-Type", "X-Request-ID"],
     )
 
     application.include_router(api_router)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -26,6 +26,10 @@ logger = get_logger(__name__)
 MAX_VERIFICATION_SEARCHES = 10
 # Cap ReAct tool-call rounds so the verifier cannot loop search→scrape→submit indefinitely.
 VERIFIER_RECURSION_LIMIT = 28
+
+# Max chars of JSON-serialised facts to include in the ReAct context window.
+# Keeps the prompt within model token limits without truncating individual fact entries.
+_MAX_FACTS_CHARS = 50_000
 
 
 class _VerificationSchema(BaseModel):
@@ -119,7 +123,7 @@ class VerifierAgent(ReActAgent):
             max_searches=MAX_VERIFICATION_SEARCHES,
         )
 
-        facts_json = json.dumps(new_facts, indent=2)[:50_000]
+        facts_json = json.dumps(new_facts, indent=2)[:_MAX_FACTS_CHARS]
         user_prompt = (
             f"Here are {len(new_facts)} newly extracted facts about {state['target_name']} "
             f"that need verification:\n\n{facts_json}\n\n"
@@ -166,7 +170,7 @@ class VerifierAgent(ReActAgent):
                     AuditEntry(
                         node="verifier",
                         action="active_verification",
-                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        timestamp=datetime.now(UTC).isoformat(),
                         model_used=model_slug,
                         input_summary=f"Verified {len(new_facts)} new facts (recursion limit hit)",
                         output_summary="Stopped at recursion limit; no verification submitted",
@@ -227,7 +231,7 @@ class VerifierAgent(ReActAgent):
         audit = AuditEntry(
             node="verifier",
             action="active_verification",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             model_used=model_slug,
             input_summary=f"Verified {len(new_facts)} new facts (skipped {already_verified_count} already verified)",
             output_summary=(

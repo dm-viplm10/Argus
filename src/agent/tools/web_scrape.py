@@ -25,7 +25,11 @@ USER_AGENTS = [
 ]
 
 _domain_last_request: dict[str, float] = {}
+_domain_locks: dict[str, asyncio.Lock] = {}
 _POLITENESS_DELAY = 2.0
+
+# Cap scraped content so a single page cannot blow out the ReAct context window.
+_MAX_CONTENT_CHARS = 15_000
 
 
 class WebScrapeTool(BaseTool):
@@ -52,12 +56,23 @@ class WebScrapeTool(BaseTool):
 
     async def _scrape(self, url: str) -> str:
         domain = urlparse(url).netloc
-        loop = asyncio.get_running_loop()
-        now = loop.time()
-        last = _domain_last_request.get(domain, 0.0)
-        if now - last < _POLITENESS_DELAY:
-            await asyncio.sleep(_POLITENESS_DELAY - (now - last))
-        _domain_last_request[domain] = loop.time()
+
+        # Per-domain lock prevents concurrent scrapes from racing on _domain_last_request.
+        # Lock creation is safe without a guard because asyncio is cooperative — no await
+        # between the existence check and the assignment, so only one coroutine runs here.
+        if domain not in _domain_locks:
+            _domain_locks[domain] = asyncio.Lock()
+
+        async with _domain_locks[domain]:
+            loop = asyncio.get_running_loop()
+            now = loop.time()
+            last = _domain_last_request.get(domain, 0.0)
+            wait_time = max(0.0, _POLITENESS_DELAY - (now - last))
+            # Reserve the slot before releasing the lock so back-to-back calls queue correctly.
+            _domain_last_request[domain] = now + wait_time
+
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
 
         last_error: Exception | None = None
         for attempt in range(self.max_retries):
@@ -78,7 +93,7 @@ class WebScrapeTool(BaseTool):
                 text = self._extract_text(html, url)
                 if text:
                     logger.info("scrape_success", url=url, length=len(text))
-                    return text[:15_000]  # Cap at 15k chars to keep ReAct context manageable
+                    return text[:_MAX_CONTENT_CHARS]
                 return f"[No extractable content at {url}]"
 
             except httpx.HTTPStatusError as exc:

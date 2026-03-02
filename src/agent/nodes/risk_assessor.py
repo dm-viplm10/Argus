@@ -17,6 +17,12 @@ from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Per-input context budget (chars of JSON) — keeps the risk assessor's total prompt
+# within model token limits while preserving the most risk-relevant content.
+_MAX_FLAGS_CHARS = 10_000       # existing flags provided as de-duplication context
+_MAX_FINDINGS_CHARS = 40_000   # new verified facts to assess
+_MAX_RELATIONSHIPS_CHARS = 20_000  # relationship graph for structural risk signals
+
 
 class RiskAssessorAgent(StructuredOutputAgent):
     """Evaluates new verified findings for risk flags, avoiding duplicate flags from prior phases."""
@@ -57,9 +63,9 @@ class RiskAssessorAgent(StructuredOutputAgent):
             "risk_assessor",
             target_name=state["target_name"],
             target_context=state.get("target_context", ""),
-            existing_flags_json=json.dumps(existing_flags_summary, indent=2)[:10_000] if existing_flags_summary else "None identified yet.",
-            findings_json=json.dumps(new_verified, indent=2)[:40_000],
-            relationships_json=json.dumps(relationships, indent=2)[:20_000],
+            existing_flags_json=json.dumps(existing_flags_summary, indent=2)[:_MAX_FLAGS_CHARS] if existing_flags_summary else "None identified yet.",
+            findings_json=json.dumps(new_verified, indent=2)[:_MAX_FINDINGS_CHARS],
+            relationships_json=json.dumps(relationships, indent=2)[:_MAX_RELATIONSHIPS_CHARS],
         )
 
         start = time.monotonic()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -21,7 +22,10 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 router = APIRouter(prefix="/evaluate", tags=["evaluation"])
 
-_evaluations: dict[str, dict] = {}
+# Bounded in-memory store: oldest entries are evicted when the cap is reached.
+# Evaluation results are transient — for long-term storage use Redis or a database.
+_MAX_EVALUATIONS = 1_000
+_evaluations: OrderedDict[str, dict] = OrderedDict()
 
 
 @router.post("", response_model=EvaluationResponse)
@@ -107,6 +111,8 @@ async def run_evaluation(
         evaluation_report=evaluation_report,
     )
     _evaluations[eval_id] = result.model_dump()
+    if len(_evaluations) > _MAX_EVALUATIONS:
+        _evaluations.popitem(last=False)  # evict oldest entry
     logger.info("evaluation_completed", research_id=research_id, eval_id=eval_id)
     return result
 
