@@ -13,8 +13,10 @@ Autonomous AI OSINT (Open Source Intelligence) investigation agent. Conducts mul
                     └────────────┬───────────────┘
                                  │
                     ┌────────────▼───────────────┐
-                    │   Inline asyncio tasks      │
-                    │  (Redis checkpoints)        │
+                    │     ResearchService         │
+                    │  (job lifecycle, asyncio    │
+                    │   tasks, event queues,      │
+                    │   1-hour hard timeout)      │
                     └────────────┬───────────────┘
                                  │
           ┌──────────────────────▼──────────────────────┐
@@ -37,8 +39,8 @@ Autonomous AI OSINT (Open Source Intelligence) investigation agent. Conducts mul
 | Phase Strategist | GPT-4.1 | Dynamic phase strategy post–Phase 1 |
 | Query Refiner | GPT-4.1-mini | Search query generation |
 | Search & Analyze | Gemini 2.5 Flash | Web research + fact/entity extraction (ReAct) |
-| Verifier | Gemini 2.5 Pro | Active fact verification via search (ReAct) |
-| Risk Assessor | GPT-4.1 | Red flag identification |
+| Verifier | Gemini 2.5 Flash | Active fact verification via search (ReAct) |
+| Risk Assessor | Gemini 2.5 Pro | Red flag identification |
 | Graph Builder | — | Neo4j writes (no LLM) |
 | Synthesizer | Claude Sonnet 4.6 | Report generation |
 
@@ -49,12 +51,12 @@ All models accessed via **OpenRouter** with automatic fallback chains.
 - **AI Orchestration**: LangGraph v1.0 (Supervisor + ReAct patterns)
 - **LLM Gateway**: OpenRouter (multi-model)
 - **Search**: Tavily API (AI-native search)
-- **Graph Database**: Neo4j 5 Community
+- **Graph Database**: Neo4j 5 Community (ACID write transactions)
 - **Web Framework**: FastAPI (async)
-- **Execution**: Inline asyncio tasks (SSE streaming)
+- **Execution**: Inline asyncio tasks with hard timeout (`RESEARCH_TIMEOUT_SECONDS`)
 - **Checkpointing**: langgraph-checkpoint-redis (durable execution)
 - **Observability**: LangSmith + Structlog
-- **Streaming**: SSE via `get_stream_writer()`
+- **Streaming**: SSE via `astream_events` → `ResearchService` event queue
 
 ## Prerequisites
 
@@ -91,15 +93,16 @@ open http://localhost:7474
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/research` | Start a new investigation |
+| DELETE | `/api/v1/research/{id}/cancel` | Cancel a running job |
 | GET | `/api/v1/research/{id}` | Get full results |
 | GET | `/api/v1/research/{id}/status` | Real-time status |
 | GET | `/api/v1/research/{id}/stream` | SSE progress stream |
 | GET | `/api/v1/graph/{id}` | Identity graph (JSON, D3-compatible) |
 | GET | `/api/v1/graph/{id}/export?format=...` | Export graph (`json`, `graphml`, `png`, `jpeg`) |
-| POST | `/api/v1/evaluate` | Run evaluation for a completed research job (ground truth + optional LLM judge) |
+| POST | `/api/v1/evaluate` | Run evaluation for a completed research job |
 | GET | `/api/v1/evaluate/{evaluation_id}/results` | Get evaluation results by ID |
-| GET | `/api/v1/health` | Health check |
-| GET | `/api/v1/ready` | Readiness (Neo4j connectivity) |
+| GET | `/api/v1/health` | Liveness probe — returns `{"status": "healthy"}` |
+| GET | `/api/v1/ready` | Readiness probe — checks Neo4j **and** Redis connectivity |
 
 ### Start a Research Job
 
@@ -139,20 +142,35 @@ make graph-export # Export identity graph
 
 ```
 src/
-├── main.py              # FastAPI app factory
-├── config.py            # Pydantic Settings
+├── main.py              # FastAPI app factory + lifespan (startup validation, CORS)
+├── config.py            # Pydantic Settings (lru_cache-d, read once at startup)
 ├── api/                 # REST API endpoints
+│   ├── dependencies.py  # DI singletons: neo4j, redis, registry, research_service
+│   ├── graph_image.py   # Matplotlib graph rendering (Agg backend, singleton guard)
+│   └── v1/
+│       ├── research.py  # Research CRUD — delegates to ResearchService
+│       ├── graph.py     # Graph fetch/export (shared _fetch_graph_data helper)
+│       ├── evaluations.py # Evaluation store (capped at 1,000 entries, LRU eviction)
+│       ├── health.py    # /health (liveness) + /ready (Neo4j + Redis readiness)
+│       ├── sse_mapper.py  # Maps raw LangGraph astream_events to SSE (event_type, data) pairs
+│       └── schemas/     # Pydantic request/response models (research, graph, evaluation)
 ├── agent/               # LangGraph supervisor + nodes
 │   ├── base.py          # BaseAgent, StructuredOutputAgent, ReActAgent, ToolNode
+│   │                    # (all three intermediate classes enforce @abstractmethod)
 │   ├── graph.py         # StateGraph definition, agent wiring
 │   ├── edges.py         # Conditional routing
 │   ├── state.py         # ResearchState TypedDict
 │   ├── nodes/           # 9 agent classes (planner, supervisor, phase_strategist, etc.)
-│   ├── prompts/         # Prompt templates + PromptRegistry
-│   └── tools/           # Tavily search, web scrape
+│   ├── prompts/
+│   │   ├── registry.py  # PromptRegistry — loads .md templates, validate_all() at startup
+│   │   └── templates/   # One .md file per task (supervisor, planner, verifier, …)
+│   └── tools/           # Tavily search, web_scrape (per-domain asyncio lock)
 ├── models/              # LLM registry, model router, schemas
-├── services/            # Business logic services
-├── graph_db/            # Neo4j connection, schema, queries
+├── services/
+│   ├── research_service.py  # Job lifecycle: create, stream, cancel, timeout
+│   ├── checkpoint_service.py
+│   └── cache_service.py
+├── graph_db/            # Neo4j connection (ACID read/write transactions), schema, queries
 ├── evaluation/          # Metrics, ground truth files, evaluator, LLM judge
 └── utils/               # Logging, rate limiting, retry
 ```
@@ -163,3 +181,13 @@ src/
 - **Neo4j Browser**: Identity graph at http://localhost:7474
 - **RedisInsight**: Cache/queue state at http://localhost:8001
 - **Structlog**: JSON-formatted structured logs
+
+## Configuration Highlights
+
+Key settings in `.env` (see [docs/deployment.md](docs/deployment.md) for the full list):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RESEARCH_TIMEOUT_SECONDS` | `3600` | Hard wall-clock cap per research run |
+| `ALLOWED_ORIGINS` | `["http://localhost:8501","http://localhost:3000"]` | CORS allow-list |
+| `LOG_FORMAT` | `json` | `json` for production, `console` for local dev |
