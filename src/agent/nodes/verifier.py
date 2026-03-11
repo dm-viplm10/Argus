@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import time
-from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -15,10 +13,9 @@ from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel, Field
 
 from src.agent.base import ReActAgent
+from src.agent.nodes.utils import extract_tool_call_args, truncate_json
 from src.agent.tools.tavily_search import create_tavily_search_tool
 from src.agent.tools.web_scrape import WebScrapeTool
-from src.models.llm_registry import MODEL_CONFIG
-from src.models.schemas import AuditEntry
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -78,22 +75,12 @@ def _extract_verification(
     messages: list,
 ) -> tuple[list[dict], list[str], list[dict]]:
     """Pull verification results from the submit_verification tool call args."""
-    verified_facts: list[dict] = []
-    unverified_claims: list[str] = []
-    contradictions: list[dict] = []
-
-    for msg in messages:
-        tool_calls = getattr(msg, "tool_calls", None)
-        if not tool_calls:
-            continue
-        for tc in tool_calls:
-            if tc.get("name") == "submit_verification":
-                args = tc.get("args", {})
-                verified_facts = args.get("verified_facts", [])
-                unverified_claims = args.get("unverified_claims", [])
-                contradictions = args.get("contradictions", [])
-
-    return verified_facts, unverified_claims, contradictions
+    result = extract_tool_call_args(
+        messages,
+        "submit_verification",
+        ["verified_facts", "unverified_claims", "contradictions"],
+    )
+    return result["verified_facts"], result["unverified_claims"], result["contradictions"]
 
 
 class VerifierAgent(ReActAgent):
@@ -123,7 +110,7 @@ class VerifierAgent(ReActAgent):
             max_searches=MAX_VERIFICATION_SEARCHES,
         )
 
-        facts_json = json.dumps(new_facts, indent=2)[:_MAX_FACTS_CHARS]
+        facts_json = truncate_json(new_facts, _MAX_FACTS_CHARS)
         user_prompt = (
             f"Here are {len(new_facts)} newly extracted facts about {state['target_name']} "
             f"that need verification:\n\n{facts_json}\n\n"
@@ -144,11 +131,9 @@ class VerifierAgent(ReActAgent):
         )
 
         start = time.monotonic()
-        config = {"recursion_limit": VERIFIER_RECURSION_LIMIT}
         try:
-            result = await agent.ainvoke(
-                {"messages": [HumanMessage(content=user_prompt)]},
-                config=config,
+            messages, elapsed_ms = await self._run_react_agent(
+                agent, user_prompt, config={"recursion_limit": VERIFIER_RECURSION_LIMIT}
             )
         except GraphRecursionError:
             elapsed_ms = int((time.monotonic() - start) * 1000)
@@ -158,30 +143,20 @@ class VerifierAgent(ReActAgent):
                 elapsed_ms=elapsed_ms,
             )
             writer({"node": "verifier", "status": "recursion_limit", "message": "Stopped after max steps"})
-            model_spec = MODEL_CONFIG.get("verifier")
-            model_slug = model_spec.slug if model_spec else "unknown"
             return {
                 "verified_facts": [],
                 "unverified_claims": [f.get("fact", "") for f in new_facts],
                 "contradictions": [],
                 "facts_verified_count": already_verified_count + len(new_facts),
                 "current_phase_verified": True,
-                "audit_log": [
-                    AuditEntry(
-                        node="verifier",
-                        action="active_verification",
-                        timestamp=datetime.now(UTC).isoformat(),
-                        model_used=model_slug,
-                        input_summary=f"Verified {len(new_facts)} new facts (recursion limit hit)",
-                        output_summary="Stopped at recursion limit; no verification submitted",
-                        duration_ms=elapsed_ms,
-                    ).model_dump()
-                ],
+                **self._build_audit(
+                    action="active_verification",
+                    model_used=self._get_model_slug(),
+                    input_summary=f"Verified {len(new_facts)} new facts (recursion limit hit)",
+                    output_summary="Stopped at recursion limit; no verification submitted",
+                    duration_ms=elapsed_ms,
+                ),
             }
-
-        elapsed_ms = int((time.monotonic() - start) * 1000)
-
-        messages = result.get("messages", [])
         verified, unverified_claims, contradictions = _extract_verification(messages)
 
         # If the agent stopped without calling submit_verification, force one more round
@@ -225,22 +200,6 @@ class VerifierAgent(ReActAgent):
             )
             unverified_claims = [f.get("fact", "") for f in new_facts if f.get("fact")]
 
-        model_spec = MODEL_CONFIG.get("verifier")
-        model_slug = model_spec.slug if model_spec else "unknown"
-
-        audit = AuditEntry(
-            node="verifier",
-            action="active_verification",
-            timestamp=datetime.now(UTC).isoformat(),
-            model_used=model_slug,
-            input_summary=f"Verified {len(new_facts)} new facts (skipped {already_verified_count} already verified)",
-            output_summary=(
-                f"{len(verified)} verified, {len(unverified_claims)} unverified, "
-                f"{len(contradictions)} contradictions"
-            ),
-            duration_ms=elapsed_ms,
-        )
-
         writer({
             "node": "verifier",
             "status": "complete",
@@ -255,5 +214,14 @@ class VerifierAgent(ReActAgent):
             "contradictions": contradictions,
             "facts_verified_count": already_verified_count + len(new_facts),
             "current_phase_verified": True,
-            "audit_log": [audit.model_dump()],
+            **self._build_audit(
+                action="active_verification",
+                model_used=self._get_model_slug(),
+                input_summary=f"Verified {len(new_facts)} new facts (skipped {already_verified_count} already verified)",
+                output_summary=(
+                    f"{len(verified)} verified, {len(unverified_claims)} unverified, "
+                    f"{len(contradictions)} contradictions"
+                ),
+                duration_ms=elapsed_ms,
+            ),
         }

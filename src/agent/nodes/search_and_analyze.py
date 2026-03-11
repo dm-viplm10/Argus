@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -15,7 +14,6 @@ from pydantic import BaseModel, Field
 from src.agent.base import ReActAgent
 from src.agent.tools.tavily_search import create_tavily_search_tool
 from src.agent.tools.web_scrape import WebScrapeTool
-from src.models.schemas import AuditEntry
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -155,11 +153,7 @@ class SearchAndAnalyzeAgent(ReActAgent):
             f"Queries to execute:\n{queries_text}"
         )
 
-        start = time.monotonic()
-        result = await agent.ainvoke({"messages": [HumanMessage(content=user_prompt)]})
-        elapsed_ms = int((time.monotonic() - start) * 1000)
-
-        messages = result.get("messages", [])
+        messages, elapsed_ms = await self._run_react_agent(agent, user_prompt)
         facts, entities, relationships, new_urls = _extract_findings(messages)
 
         # Return only the delta — the Annotated[set, _merge_sets] reducer on ResearchState
@@ -183,22 +177,6 @@ class SearchAndAnalyzeAgent(ReActAgent):
             for q in queries_batch
         ]
 
-        audit = AuditEntry(
-            node="search_and_analyze",
-            action="search_and_extract",
-            timestamp=datetime.now(UTC).isoformat(),
-            model_used="google/gemini-2.5-flash",
-            input_summary=(
-                f"Executed {len(queries_batch)} queries"
-                + (f" ({len(remaining_queries)} deferred)" if remaining_queries else "")
-            ),
-            output_summary=(
-                f"Extracted {len(facts)} facts, {len(entities)} entities, "
-                f"{len(relationships)} relationships"
-            ),
-            duration_ms=elapsed_ms,
-        )
-
         writer({
             "node": "search_and_analyze",
             "status": "complete",
@@ -219,5 +197,17 @@ class SearchAndAnalyzeAgent(ReActAgent):
             "entities": entities,
             "relationships": relationships,
             "current_phase_searched": phase_searched,
-            "audit_log": [audit.model_dump()],
+            **self._build_audit(
+                action="search_and_extract",
+                model_used=self._get_model_slug(),
+                input_summary=(
+                    f"Executed {len(queries_batch)} queries"
+                    + (f" ({len(remaining_queries)} deferred)" if remaining_queries else "")
+                ),
+                output_summary=(
+                    f"Extracted {len(facts)} facts, {len(entities)} entities, "
+                    f"{len(relationships)} relationships"
+                ),
+                duration_ms=elapsed_ms,
+            ),
         }

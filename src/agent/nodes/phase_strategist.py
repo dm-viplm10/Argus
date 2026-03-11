@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import time
-from datetime import datetime, timezone
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_stream_writer
 
 from src.agent.base import StructuredOutputAgent
-from src.models.llm_registry import MODEL_CONFIG
-from src.models.schemas import AuditEntry, PhaseStrategyDecision
+from src.agent.nodes.utils import reset_phase_flags
+from src.models.schemas import PhaseStrategyDecision
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -85,38 +83,27 @@ class PhaseStrategistAgent(StructuredOutputAgent):
             findings_summary=findings_summary,
         )
 
-        start = time.monotonic()
-        result = await self._router.invoke(
-            "phase_strategist",
+        result, elapsed_ms, usage = await self._invoke_structured(
             [
                 SystemMessage(content=prompt),
                 HumanMessage(content="Evaluate the Phase 1 findings and decide the next steps."),
             ],
-            structured_output=PhaseStrategyDecision,
+            PhaseStrategyDecision,
         )
-        elapsed_ms = int((time.monotonic() - start) * 1000)
-        usage = self._router.last_usage
 
         decision = result if isinstance(result, PhaseStrategyDecision) else PhaseStrategyDecision(
             action="synthesize", phases_to_add=[], reasoning="Parse failure"
         )
 
-        model_spec = MODEL_CONFIG.get("phase_strategist")
-        model_slug = model_spec.slug if model_spec else "unknown"
-
-        audit = AuditEntry(
-            node="phase_strategist",
-            action="phase_decision",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            model_used=model_slug,
-            output_summary=f"{decision.action}: {decision.reasoning[:200]}",
-            duration_ms=elapsed_ms,
-            tokens_consumed=usage["tokens"],
-            cost_usd=usage["cost"],
-        )
-
         updates: dict[str, Any] = {
-            "audit_log": [audit.model_dump()],
+            **self._build_audit(
+                action="phase_decision",
+                model_used=self._get_model_slug(),
+                output_summary=f"{decision.action}: {decision.reasoning[:200]}",
+                duration_ms=elapsed_ms,
+                tokens_consumed=usage["tokens"],
+                cost_usd=usage["cost"],
+            ),
         }
 
         if decision.action == "add_phases" and decision.phases_to_add:
@@ -130,11 +117,7 @@ class PhaseStrategistAgent(StructuredOutputAgent):
             plan.extend(new_phases)
             updates["research_plan"] = plan
             updates["max_phases"] = len(plan)
-            updates["current_phase"] = base_num
-            updates["phase_complete"] = False
-            updates["current_phase_searched"] = False
-            updates["current_phase_verified"] = False
-            updates["current_phase_risk_assessed"] = False
+            updates.update(reset_phase_flags(new_phase=base_num))
             updates["dynamic_phases"] = False
             first_phase = new_phases[0]
             updates["pending_queries"] = first_phase.get("queries", [])

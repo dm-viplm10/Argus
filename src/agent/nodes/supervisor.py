@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -11,7 +9,8 @@ from langgraph.config import get_stream_writer
 
 from src.agent.base import StructuredOutputAgent
 from src.agent.cancellation import clear, is_cancelled
-from src.models.schemas import AuditEntry, SupervisorDecision
+from src.agent.nodes.utils import reset_phase_flags
+from src.models.schemas import SupervisorDecision
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -39,12 +38,7 @@ class SupervisorAgent(StructuredOutputAgent):
                 "next_action": "FINISH",
                 "supervisor_instructions": "",
                 "iteration_count": iteration,
-                "audit_log": [AuditEntry(
-                    node="supervisor",
-                    action="cancelled",
-                    timestamp=datetime.now(UTC).isoformat(),
-                    output_summary="Job cancelled by user",
-                ).model_dump()],
+                **self._build_audit(action="cancelled", output_summary="Job cancelled by user"),
             }
 
         prompt = self._prompt_registry.get_prompt(
@@ -71,17 +65,13 @@ class SupervisorAgent(StructuredOutputAgent):
             has_report=bool(state.get("final_report")),
         )
 
-        start = time.monotonic()
-        result = await self._router.invoke(
-            "supervisor",
+        result, elapsed_ms, usage = await self._invoke_structured(
             [
                 SystemMessage(content=prompt),
                 HumanMessage(content="Decide the next action."),
             ],
-            structured_output=SupervisorDecision,
+            SupervisorDecision,
         )
-        elapsed_ms = int((time.monotonic() - start) * 1000)
-        usage = self._router.last_usage
 
         decision = result if isinstance(result, SupervisorDecision) else SupervisorDecision(
             next_agent="FINISH", reasoning="Failed to parse decision"
@@ -92,17 +82,6 @@ class SupervisorAgent(StructuredOutputAgent):
             next_agent=decision.next_agent,
             reasoning=decision.reasoning,
             iteration=iteration,
-        )
-
-        audit = AuditEntry(
-            node="supervisor",
-            action="route_decision",
-            timestamp=datetime.now(UTC).isoformat(),
-            model_used="openai/gpt-4.1",
-            output_summary=f"Routed to {decision.next_agent}: {decision.reasoning}",
-            duration_ms=elapsed_ms,
-            tokens_consumed=usage["tokens"],
-            cost_usd=usage["cost"],
         )
 
         writer({
@@ -117,16 +96,19 @@ class SupervisorAgent(StructuredOutputAgent):
             "next_action": decision.next_agent,
             "supervisor_instructions": decision.instructions_for_agent,
             "iteration_count": iteration,
-            "audit_log": [audit.model_dump()],
+            **self._build_audit(
+                action="route_decision",
+                model_used=self._get_model_slug(),
+                output_summary=f"Routed to {decision.next_agent}: {decision.reasoning}",
+                duration_ms=elapsed_ms,
+                tokens_consumed=usage["tokens"],
+                cost_usd=usage["cost"],
+            ),
         }
 
         if decision.next_agent == "query_refiner" and state.get("phase_complete"):
             new_phase = state.get("current_phase", 1) + 1
-            updates["current_phase"] = new_phase
-            updates["phase_complete"] = False
-            updates["current_phase_searched"] = False
-            updates["current_phase_verified"] = False
-            updates["current_phase_risk_assessed"] = False
+            updates.update(reset_phase_flags(new_phase=new_phase))
             logger.info("phase_advanced", new_phase=new_phase)
 
         return updates

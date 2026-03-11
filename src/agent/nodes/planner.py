@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import time
-from datetime import datetime, timezone
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_stream_writer
 
 from src.agent.base import StructuredOutputAgent
-from src.models.schemas import AuditEntry, ResearchPlan
+from src.agent.nodes.utils import reset_phase_flags
+from src.models.schemas import ResearchPlan
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -37,17 +36,13 @@ class PlannerAgent(StructuredOutputAgent):
             max_phases_times_3=max_phases * 3,
         )
 
-        start = time.monotonic()
-        result = await self._router.invoke(
-            "planner",
+        result, elapsed_ms, usage = await self._invoke_structured(
             [
                 SystemMessage(content=prompt),
                 HumanMessage(content="Generate the research plan now."),
             ],
-            structured_output=ResearchPlan,
+            ResearchPlan,
         )
-        elapsed_ms = int((time.monotonic() - start) * 1000)
-        usage = self._router.last_usage
 
         plan = result if isinstance(result, ResearchPlan) else ResearchPlan(phases=[])
         plan_dicts = [p.model_dump() for p in plan.phases]
@@ -60,25 +55,18 @@ class PlannerAgent(StructuredOutputAgent):
             )
             plan_dicts = plan_dicts[:max_phases]
 
-        audit = AuditEntry(
-            node="planner",
-            action="generate_plan",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            model_used="anthropic/claude-sonnet-4.6",
-            output_summary=f"Generated {len(plan_dicts)}-phase plan with {plan.total_estimated_queries} queries",
-            duration_ms=elapsed_ms,
-            tokens_consumed=usage["tokens"],
-            cost_usd=usage["cost"],
-        )
-
         writer({"node": "planner", "status": "complete", "phases": len(plan_dicts)})
 
         return {
             "research_plan": plan_dicts,
             "current_phase": 1,
-            "phase_complete": False,
-            "current_phase_searched": False,
-            "current_phase_verified": False,
-            "current_phase_risk_assessed": False,
-            "audit_log": [audit.model_dump()],
+            **reset_phase_flags(),
+            **self._build_audit(
+                action="generate_plan",
+                model_used=self._get_model_slug(),
+                output_summary=f"Generated {len(plan_dicts)}-phase plan with {plan.total_estimated_queries} queries",
+                duration_ms=elapsed_ms,
+                tokens_consumed=usage["tokens"],
+                cost_usd=usage["cost"],
+            ),
         }

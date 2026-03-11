@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import json
-import time
-from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_stream_writer
 
 from src.agent.base import StructuredOutputAgent
-from src.models.llm_registry import MODEL_CONFIG
-from src.models.schemas import AuditEntry
+from src.agent.nodes.utils import truncate_json
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -40,45 +36,34 @@ class SynthesizerAgent(StructuredOutputAgent):
             "synthesizer",
             target_name=state["target_name"],
             target_context=state.get("target_context", ""),
-            verified_facts_json=json.dumps(state.get("verified_facts", []), indent=2)[:_MAX_VERIFIED_FACTS_CHARS],
-            entities_json=json.dumps(state.get("entities", []), indent=2)[:_MAX_ENTITIES_CHARS],
-            risk_json=json.dumps(state.get("risk_flags", []), indent=2)[:_MAX_RISK_CHARS],
-            unverified_json=json.dumps(state.get("unverified_claims", []), indent=2)[:_MAX_UNVERIFIED_CHARS],
+            verified_facts_json=truncate_json(state.get("verified_facts", []), _MAX_VERIFIED_FACTS_CHARS),
+            entities_json=truncate_json(state.get("entities", []), _MAX_ENTITIES_CHARS),
+            risk_json=truncate_json(state.get("risk_flags", []), _MAX_RISK_CHARS),
+            unverified_json=truncate_json(state.get("unverified_claims", []), _MAX_UNVERIFIED_CHARS),
             searches_count=len(state.get("search_queries_executed", [])),
             sources_count=len(state.get("urls_visited", set())),
             phases_completed=state.get("current_phase", 0),
         )
 
-        start = time.monotonic()
-        result = await self._router.invoke(
-            "synthesizer",
+        result, elapsed_ms, usage = await self._invoke_structured(
             [
                 SystemMessage(content=prompt),
                 HumanMessage(content="Write the complete investigation report now."),
             ],
         )
-        elapsed_ms = int((time.monotonic() - start) * 1000)
-        usage = self._router.last_usage
 
         report = getattr(result, "content", str(result))
-
-        model_spec = MODEL_CONFIG.get("synthesizer")
-        model_slug = model_spec.slug if model_spec else "unknown"
-
-        audit = AuditEntry(
-            node="synthesizer",
-            action="generate_report",
-            timestamp=datetime.now(UTC).isoformat(),
-            model_used=model_slug,
-            output_summary=f"Generated report with {len(report)} characters",
-            tokens_consumed=usage["tokens"],
-            cost_usd=usage["cost"],
-            duration_ms=elapsed_ms,
-        )
 
         writer({"node": "synthesizer", "status": "complete", "report_length": len(report)})
 
         return {
             "final_report": report,
-            "audit_log": [audit.model_dump()],
+            **self._build_audit(
+                action="generate_report",
+                model_used=self._get_model_slug(),
+                output_summary=f"Generated report with {len(report)} characters",
+                duration_ms=elapsed_ms,
+                tokens_consumed=usage["tokens"],
+                cost_usd=usage["cost"],
+            ),
         }

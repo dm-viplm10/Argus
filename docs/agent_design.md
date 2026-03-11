@@ -13,6 +13,43 @@ All graph nodes extend one of three base classes in `src/agent/base.py`:
 
 `@abstractmethod` is declared on `run()` in **every** class in the hierarchy — including the three intermediate classes. This is necessary because Python's ABC machinery only enforces `@abstractmethod` for methods that remain abstract in the immediate superclass. If an intermediate class overrides `run()` with a concrete body (e.g. `raise NotImplementedError`), Python considers the contract satisfied and allows subclasses to skip the implementation. Re-declaring `@abstractmethod` on each intermediate class restores enforcement at every level, so instantiating a node class that omits `run()` raises `TypeError` at import time rather than failing silently at runtime.
 
+### Shared Helper Methods
+
+Each base class exposes private helpers that eliminate repetitive boilerplate. These are internal DRY utilities — distinct from `run()`, which is the external contract defining what a node does. The helpers define how the LLM is called and how audit entries are built.
+
+**`BaseAgent` (available to every node):**
+
+| Helper | Purpose |
+|--------|---------|
+| `_get_model_slug()` | Looks up the configured model slug from `MODEL_CONFIG` by `self.name`. Falls back to `"unknown"`. Ensures audit entries always reflect the actual configured model — never a hardcoded string. |
+| `_build_audit(action, output_summary, ...)` | Constructs `{"audit_log": [AuditEntry(...).model_dump()]}` ready to spread into a node's return dict. Centralises UTC timestamp generation and `AuditEntry` construction. All keyword args are optional — only `action` is required. |
+
+**`StructuredOutputAgent`:**
+
+| Helper | Purpose |
+|--------|---------|
+| `_invoke_structured(messages, schema)` | Wraps `router.invoke(self.name, messages, structured_output=schema)` with wall-time measurement. Returns `(result, elapsed_ms, usage)`. Eliminates the repeated start/stop timer + `last_usage` extraction across all 6 structured-output nodes. |
+
+**`ReActAgent`:**
+
+| Helper | Purpose |
+|--------|---------|
+| `_run_react_agent(agent, user_prompt, config)` | Wraps a compiled ReAct agent's `ainvoke` with wall-time measurement. Returns `(messages, elapsed_ms)`. The optional `config` dict supports recursion limit overrides (e.g. Verifier uses `{"recursion_limit": 28}`). |
+
+### Node Utilities (`src/agent/nodes/utils.py`)
+
+Pure functions shared by multiple nodes — no LLM calls, no I/O:
+
+| Function | Used by | Purpose |
+|----------|---------|---------|
+| `truncate_json(obj, max_chars)` | Verifier, Risk Assessor, Synthesizer | Serialise to indented JSON and cap at a character limit, keeping prompt context within model token budgets. Each caller defines named `_MAX_*_CHARS` constants to document intent. |
+| `extract_tool_call_args(messages, tool_name, fields)` | Verifier | Extract named fields from the first matching tool call in a ReAct message list. Returns a `{field: []}` dict for each requested field, defaulting to empty list if the tool was never called. |
+| `reset_phase_flags(new_phase?)` | Supervisor, Planner, Phase Strategist | Return the standard dict of phase-completion booleans (`phase_complete`, `current_phase_searched`, `current_phase_verified`, `current_phase_risk_assessed`) all set to `False`. Pass `new_phase` to also set `current_phase`. |
+
+### Why `get_stream_writer()` Stays in `run()`
+
+`get_stream_writer()` reads from a LangGraph `contextvars.ContextVar` that is set fresh per graph invocation. It must be called inside `run()` at execution time — not in `__init__` at app startup — to capture the correct stream writer for the current research job. Capturing it at init time would bind the writer to a non-existent context and break streaming across concurrent jobs.
+
 Prompts are centralized in `PromptRegistry` (`src/agent/prompts/registry.py`), mirroring the LLM registry pattern.
 
 ## Why Supervisor Pattern

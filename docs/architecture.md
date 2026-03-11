@@ -80,6 +80,43 @@ All graph nodes implement the `BaseAgent` abstraction (`src/agent/base.py`):
 
 The graph wires agents via dependency injection: each agent receives `router`, `registry`, `settings`, `neo4j_conn`, or `prompt_registry` as needed. Node callables are `agent.run`.
 
+### Shared Base Class Helpers
+
+The base classes provide shared helpers that eliminate boilerplate repeated across all nodes:
+
+**On `BaseAgent` (available to all nodes):**
+
+| Helper | Purpose |
+|--------|---------|
+| `_get_model_slug()` | Looks up the configured model slug from `MODEL_CONFIG` by `self.name`. Falls back to `"unknown"`. Ensures audit entries always reflect the actual configured model — never a hardcoded string. |
+| `_build_audit(action, output_summary, ...)` | Constructs `{"audit_log": [AuditEntry(...).model_dump()]}` ready to spread into a node's return dict. Centralises UTC timestamp generation and `AuditEntry` construction. |
+
+**On `StructuredOutputAgent`:**
+
+| Helper | Purpose |
+|--------|---------|
+| `_invoke_structured(messages, schema)` | Wraps `router.invoke(self.name, messages, structured_output=schema)` with wall-time measurement. Returns `(result, elapsed_ms, usage)`. Eliminates the repeated start/stop timer + `last_usage` extraction across 6 nodes. |
+
+**On `ReActAgent`:**
+
+| Helper | Purpose |
+|--------|---------|
+| `_run_react_agent(agent, user_prompt, config)` | Wraps a compiled ReAct agent's `ainvoke` with wall-time measurement. Returns `(messages, elapsed_ms)`. The optional `config` dict supports recursion limit overrides (e.g. verifier). |
+
+### Node Utilities (`src/agent/nodes/utils.py`)
+
+Shared pure functions used by multiple nodes:
+
+| Function | Used by | Purpose |
+|----------|---------|---------|
+| `truncate_json(obj, max_chars)` | verifier, risk_assessor, synthesizer | Serialise to indented JSON and cap at a character limit, keeping prompt context within model token budgets. |
+| `extract_tool_call_args(messages, tool_name, fields)` | verifier | Extract named fields from the first matching tool call in a ReAct message list. |
+| `reset_phase_flags(new_phase?)` | supervisor, planner, phase_strategist | Return the standard dict of phase-completion booleans all set to `False`. Pass `new_phase` to also set `current_phase`. |
+
+### Why `get_stream_writer()` Stays in `run()`
+
+`get_stream_writer()` reads from a LangGraph `contextvars.ContextVar` that is set fresh per graph invocation. It must be called inside `run()` at execution time — not in `__init__` at app startup — to capture the correct stream writer for the current research job. Capturing it at init time would bind the writer to a non-existent context and break streaming across concurrent jobs.
+
 ## Data Flow
 
 1. Client POSTs to `/api/v1/research` with target info

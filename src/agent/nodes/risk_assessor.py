@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import json
-import time
-from datetime import UTC, datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_stream_writer
 
 from src.agent.base import StructuredOutputAgent
-from src.models.llm_registry import MODEL_CONFIG
-from src.models.schemas import AuditEntry, RiskAssessment
+from src.agent.nodes.utils import truncate_json
+from src.models.schemas import RiskAssessment
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -63,40 +60,21 @@ class RiskAssessorAgent(StructuredOutputAgent):
             "risk_assessor",
             target_name=state["target_name"],
             target_context=state.get("target_context", ""),
-            existing_flags_json=json.dumps(existing_flags_summary, indent=2)[:_MAX_FLAGS_CHARS] if existing_flags_summary else "None identified yet.",
-            findings_json=json.dumps(new_verified, indent=2)[:_MAX_FINDINGS_CHARS],
-            relationships_json=json.dumps(relationships, indent=2)[:_MAX_RELATIONSHIPS_CHARS],
+            existing_flags_json=truncate_json(existing_flags_summary, _MAX_FLAGS_CHARS) if existing_flags_summary else "None identified yet.",
+            findings_json=truncate_json(new_verified, _MAX_FINDINGS_CHARS),
+            relationships_json=truncate_json(relationships, _MAX_RELATIONSHIPS_CHARS),
         )
 
-        start = time.monotonic()
-        result = await self._router.invoke(
-            "risk_assessor",
+        result, elapsed_ms, usage = await self._invoke_structured(
             [
                 SystemMessage(content=prompt),
                 HumanMessage(content="Conduct your risk assessment now. Be thorough and unflinching."),
             ],
-            structured_output=RiskAssessment,
+            RiskAssessment,
         )
-        elapsed_ms = int((time.monotonic() - start) * 1000)
-        usage = self._router.last_usage
 
         output = result if isinstance(result, RiskAssessment) else RiskAssessment()
         flags = [f.model_dump() for f in output.risk_flags]
-
-        model_spec = MODEL_CONFIG.get("risk_assessor")
-        model_slug = model_spec.slug if model_spec else "unknown"
-
-        audit = AuditEntry(
-            node="risk_assessor",
-            action="assess_risk",
-            timestamp=datetime.now(UTC).isoformat(),
-            model_used=model_slug,
-            input_summary=f"Assessed {len(new_verified)} new verified facts ({already_assessed} already assessed), {len(existing_flags)} existing flags provided as context",
-            output_summary=f"Identified {len(flags)} new risk flags, overall score: {output.overall_risk_score}",
-            duration_ms=elapsed_ms,
-            tokens_consumed=usage["tokens"],
-            cost_usd=usage["cost"],
-        )
 
         writer({
             "node": "risk_assessor",
@@ -110,5 +88,13 @@ class RiskAssessorAgent(StructuredOutputAgent):
             "overall_risk_score": output.overall_risk_score,
             "risk_assessed_facts_count": already_assessed + len(new_verified),
             "current_phase_risk_assessed": True,
-            "audit_log": [audit.model_dump()],
+            **self._build_audit(
+                action="assess_risk",
+                model_used=self._get_model_slug(),
+                input_summary=f"Assessed {len(new_verified)} new verified facts ({already_assessed} already assessed), {len(existing_flags)} existing flags provided as context",
+                output_summary=f"Identified {len(flags)} new risk flags, overall score: {output.overall_risk_score}",
+                duration_ms=elapsed_ms,
+                tokens_consumed=usage["tokens"],
+                cost_usd=usage["cost"],
+            ),
         }

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
 from typing import Any
 
 from langgraph.config import get_stream_writer
@@ -17,7 +16,6 @@ from src.graph_db.queries import (
     MERGE_PERSON,
     TYPED_RELATIONSHIP_QUERIES,
 )
-from src.models.schemas import AuditEntry
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -107,14 +105,6 @@ class GraphBuilderNode(ToolNode):
 
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
-        audit = AuditEntry(
-            node="graph_builder",
-            action="populate_graph",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            output_summary=f"Created {len(nodes_created)} nodes, {len(rels_created)} relationships",
-            duration_ms=elapsed_ms,
-        )
-
         writer({
             "node": "graph_builder",
             "status": "complete",
@@ -126,5 +116,9 @@ class GraphBuilderNode(ToolNode):
             "graph_nodes_created": nodes_created,
             "graph_relationships_created": rels_created,
             "phase_complete": True,
-            "audit_log": [audit.model_dump()],
+            **self._build_audit(
+                action="populate_graph",
+                output_summary=f"Created {len(nodes_created)} nodes, {len(rels_created)} relationships",
+                duration_ms=elapsed_ms,
+            ),
         }

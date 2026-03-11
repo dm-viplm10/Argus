@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import json
-import time
-from datetime import datetime, timezone
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_stream_writer
 
 from src.agent.base import StructuredOutputAgent
-from src.models.schemas import AuditEntry, RefinedQueries
+from src.models.schemas import RefinedQueries
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -53,32 +51,25 @@ class QueryRefinerAgent(StructuredOutputAgent):
             executed_queries=json.dumps(executed[-20:]),
         )
 
-        start = time.monotonic()
-        result = await self._router.invoke(
-            "query_refiner",
+        result, elapsed_ms, _ = await self._invoke_structured(
             [
                 SystemMessage(content="You are a search query generation specialist."),
                 HumanMessage(content=prompt),
             ],
-            structured_output=RefinedQueries,
+            RefinedQueries,
         )
-        elapsed_ms = int((time.monotonic() - start) * 1000)
 
         refined = result if isinstance(result, RefinedQueries) else RefinedQueries(queries=[])
         new_queries = [q for q in refined.queries if q not in executed]
-
-        audit = AuditEntry(
-            node="query_refiner",
-            action="generate_queries",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            model_used="openai/gpt-4.1-mini",
-            output_summary=f"Generated {len(new_queries)} new queries for phase {current_phase}",
-            duration_ms=elapsed_ms,
-        )
 
         writer({"node": "query_refiner", "status": "complete", "queries_generated": len(new_queries)})
 
         return {
             "pending_queries": new_queries,
-            "audit_log": [audit.model_dump()],
+            **self._build_audit(
+                action="generate_queries",
+                model_used=self._get_model_slug(),
+                output_summary=f"Generated {len(new_queries)} new queries for phase {current_phase}",
+                duration_ms=elapsed_ms,
+            ),
         }
